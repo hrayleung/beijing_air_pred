@@ -30,6 +30,10 @@ class SeasonalNaive24:
         self.feature_list = feature_list
         self.target_list = target_list
         self.target_indices = [feature_list.index(t) for t in target_list]
+        self._center = np.asarray(getattr(input_scaler, "center_", None), dtype=np.float32)
+        self._scale = np.asarray(getattr(input_scaler, "scale_", None), dtype=np.float32)
+        if self._center.ndim != 1 or self._scale.ndim != 1 or self._center.shape != self._scale.shape:
+            raise ValueError("input_scaler must provide 1D center_ and scale_ arrays")
     
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -45,30 +49,23 @@ class SeasonalNaive24:
         H = 24
         D = len(self.target_list)
         
-        predictions = np.zeros((samples, H, N, D), dtype=np.float32)
-        
+        # Inverse-transform ONLY the target pollutant channels from X (RobustScaler is per-feature).
+        target_center = self._center[self.target_indices].reshape(1, 1, 1, D)
+        target_scale = self._scale[self.target_indices].reshape(1, 1, 1, D)
+        X_targets_raw = X[:, :, :, self.target_indices].astype(np.float32) * target_scale + target_center  # (S, L, N, D)
+
+        predictions = np.empty((samples, H, N, D), dtype=np.float32)
+
+        # Seasonal mapping:
+        # idx = (L-1) - (24-h) = L - 25 + h, for h=1..24
         for h in range(1, H + 1):
-            # Index in lookback window for value 24 hours before target
-            # Target is at t+h, we want t+h-24
-            # X covers [t-L+1, t], so index for time t+h-24 is:
-            # (t+h-24) - (t-L+1) = L + h - 25
-            lookback_idx = L + h - 25  # = L - 24 + h - 1
-            
-            if lookback_idx < 0 or lookback_idx >= L:
-                # Fallback to persistence if out of range
-                lookback_idx = L - 1
-            
-            # Get scaled values at this timestep
-            values_scaled = X[:, lookback_idx, :, :]  # (samples, N, F)
-            
-            # Inverse transform
-            values_flat = values_scaled.reshape(-1, F)
-            values_raw = self.input_scaler.inverse_transform(values_flat)
-            values_raw = values_raw.reshape(samples, N, F)
-            
-            # Extract target pollutants
-            predictions[:, h-1, :, :] = values_raw[:, :, self.target_indices]
-        
+            lookback_idx = L - 25 + h
+            predictions[:, h - 1, :, :] = X_targets_raw[:, lookback_idx, :, :]
+
+        # Quick sanity: ensure not constant across horizons.
+        if float(np.mean(np.abs(predictions[:, 0] - predictions[:, -1]))) <= 0.0:
+            raise ValueError("SeasonalNaive24 predictions appear constant across horizons (unexpected)")
+
         return predictions
     
     def __repr__(self):

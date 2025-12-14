@@ -183,6 +183,7 @@ def run_seasonal(
     """Run seasonal naive baseline."""
     from baseline.models import SeasonalNaive24
     from baseline.evaluation import evaluate_predictions
+    from baseline.evaluation.per_pollutant_report import plot_seasonal_naive_sanity
 
     print("\n" + "="*60)
     print("Running Seasonal Naive 24h (B1)")
@@ -212,6 +213,21 @@ def run_seasonal(
         expected_shape=Y_test.shape,
         require_horizon_variation=True,
     )
+
+    # Save a small seasonal sanity plot (true vs seasonal naive, PM2.5 @ station 0).
+    try:
+        plot_path = plot_seasonal_naive_sanity(
+            pred,
+            Y_test,
+            Y_mask,
+            results_dir=config['output']['results_dir'],
+            pollutant_idx=0,
+            pollutant_name=target_list[0] if target_list else "PM2.5",
+            station_idx=0,
+        )
+        print(f"Seasonal sanity plot saved to {plot_path}")
+    except Exception as e:
+        print(f"Warning: failed to save seasonal sanity plot: {e}")
     
     return results, pred
 

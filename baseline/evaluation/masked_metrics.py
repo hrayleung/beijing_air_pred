@@ -146,6 +146,66 @@ def compute_per_pollutant_metrics(
     return results
 
 
+def compute_per_pollutant_report(
+    pred: np.ndarray,
+    target: np.ndarray,
+    mask: np.ndarray,
+    pollutant_names: list = None,
+    horizons: Tuple[int, ...] = (1, 6, 12, 24),
+) -> Dict[str, Dict[str, float]]:
+    """
+    Compute per-pollutant metrics aggregated over all horizons, plus MAE at selected horizons.
+
+    Args:
+        pred/target/mask: (samples, H, N, D)
+        pollutant_names: list of D names
+        horizons: 1-indexed horizons to report MAE at
+
+    Returns:
+        Dict pollutant -> {MAE, RMSE, sMAPE, MAE_h1, MAE_h6, ...}
+    """
+    if pollutant_names is None:
+        pollutant_names = ['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3']
+
+    if pred.shape != target.shape or pred.shape != mask.shape:
+        raise ValueError(f"Shape mismatch: pred={pred.shape}, target={target.shape}, mask={mask.shape}")
+    if pred.ndim != 4:
+        raise ValueError(f"Expected 4D arrays (S,H,N,D); got {pred.shape}")
+
+    H = pred.shape[1]
+    D = pred.shape[3]
+    results: Dict[str, Dict[str, float]] = {}
+
+    for d in range(D):
+        name = pollutant_names[d] if d < len(pollutant_names) else f"target_{d}"
+        out = compute_all_metrics(pred[:, :, :, d], target[:, :, :, d], mask[:, :, :, d])
+
+        for h in horizons:
+            if h < 1 or h > H:
+                raise ValueError(f"Invalid horizon {h}; H={H}")
+            out[f"MAE_h{h}"] = masked_mae(
+                pred[:, h - 1, :, d],
+                target[:, h - 1, :, d],
+                mask[:, h - 1, :, d],
+            )
+
+        results[name] = out
+
+    return results
+
+
+def macro_average_per_pollutant(per_pollutant: Dict[str, Dict[str, float]]) -> Dict[str, float]:
+    """
+    Macro-average metrics across pollutants (equal weight per pollutant).
+    """
+    keys = ["MAE", "RMSE", "sMAPE"]
+    out: Dict[str, float] = {}
+    for k in keys:
+        vals = [float(v.get(k, np.nan)) for v in per_pollutant.values()]
+        out[f"macro_{k}"] = float(np.nanmean(vals))
+    return out
+
+
 def compute_detailed_metrics(
     pred: np.ndarray,
     target: np.ndarray,

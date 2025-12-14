@@ -8,7 +8,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .masked_metrics import compute_detailed_metrics
+from .masked_metrics import compute_detailed_metrics, compute_per_pollutant_report
+from .per_pollutant_report import write_metrics_overall, write_metrics_per_pollutant
 
 
 def _json_default(obj):
@@ -133,6 +134,9 @@ def evaluate_predictions(
     overall, per_horizon, per_pollutant = compute_detailed_metrics(
         pred_raw, target_raw, mask, pollutant_names
     )
+
+    # Replace per-pollutant metrics with report-ready version (adds MAE_h1/h6/h12/h24).
+    per_pollutant = compute_per_pollutant_report(pred_raw, target_raw, mask, pollutant_names)
     
     # Build results dict
     results = {
@@ -161,6 +165,10 @@ def evaluate_predictions(
     
     # Save to CSV
     save_metrics_to_csv(results, results_dir)
+
+    # Save per-pollutant + macro-average CSVs
+    write_metrics_per_pollutant(results, results_dir)
+    write_metrics_overall(results, results_dir)
     
     # Save detailed JSON
     save_detailed_json(results, results_dir)

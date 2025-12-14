@@ -1,0 +1,29 @@
+Per-horizon metric indexing check (MAE_h1 uses horizon index 0; MAE_h24 uses index 23)
+
+[naive]
+  h1  per_horizon: 60.818832  manual(slice): 60.818832
+  h24 per_horizon: 255.227142  manual(slice): 255.227142
+
+[seasonal]
+  h1  per_horizon: 254.494446  manual(slice): 254.494446
+  h24 per_horizon: 255.227142  manual(slice): 255.227142
+
+[lgbm]
+  h1  per_horizon: 87.205482  manual(slice): 87.205482
+  h24 per_horizon: 225.829681  manual(slice): 225.829681
+
+[lstm]
+  h1  per_horizon: 265.971375  manual(slice): 265.971375
+  h24 per_horizon: 266.196045  manual(slice): 266.196045
+
+[tcn]
+  h1  per_horizon: 173.521957  manual(slice): 173.521957
+  h24 per_horizon: 236.406952  manual(slice): 236.406952
+
+[stgcn]
+  h1  per_horizon: 262.186859  manual(slice): 262.186859
+  h24 per_horizon: 261.093384  manual(slice): 261.093384
+
+[gwnet]
+  h1  per_horizon: 250.826813  manual(slice): 250.826813
+  h24 per_horizon: 254.308136  manual(slice): 254.308136

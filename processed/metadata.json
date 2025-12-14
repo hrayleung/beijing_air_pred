@@ -1,0 +1,66 @@
+{
+  "version": "2.1",
+  "station_list": [
+    "Aotizhongxin",
+    "Changping",
+    "Dingling",
+    "Dongsi",
+    "Guanyuan",
+    "Gucheng",
+    "Huairou",
+    "Nongzhanguan",
+    "Shunyi",
+    "Tiantan",
+    "Wanliu",
+    "Wanshouxigong"
+  ],
+  "feature_list": [
+    "PM2.5",
+    "PM10",
+    "SO2",
+    "NO2",
+    "CO",
+    "O3",
+    "TEMP",
+    "PRES",
+    "DEWP",
+    "RAIN",
+    "WSPM",
+    "wd_sin",
+    "wd_cos",
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos"
+  ],
+  "target_list": [
+    "PM2.5",
+    "PM10",
+    "SO2",
+    "NO2",
+    "CO",
+    "O3"
+  ],
+  "lookback": 168,
+  "horizon": 24,
+  "split_boundaries": {
+    "train": {
+      "start": "2013-03-01 00:00:00",
+      "end": "2016-02-29 23:00:00"
+    },
+    "val": {
+      "start": "2016-03-01 00:00:00",
+      "end": "2016-10-31 23:00:00"
+    },
+    "test": {
+      "start": "2016-11-01 00:00:00",
+      "end": "2017-02-28 23:00:00"
+    }
+  },
+  "causal_imputation": true,
+  "scale_targets": false,
+  "cap_value_mode": "A",
+  "graph_top_k": 4,
+  "seed": 42,
+  "lgbm_min_origin_idx": 168
+}

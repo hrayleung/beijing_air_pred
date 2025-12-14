@@ -1,0 +1,33 @@
+# Default configuration for PRSA baselines
+seed: 42
+
+# Data paths
+data:
+  processed_dir: "processed"
+  p1_deep_dir: "processed/P1_deep"
+  tabular_dir: "processed/tabular_lgbm"
+  graphs_dir: "processed/graphs"
+
+# Task definition (FIXED - DO NOT CHANGE)
+task:
+  lookback: 168
+  horizon: 24
+  num_stations: 12
+  num_targets: 6
+  targets: ["PM2.5", "PM10", "SO2", "NO2", "CO", "O3"]
+
+# Training defaults (batch_size is per-GPU, auto-scaled by num_gpus)
+training:
+  batch_size: 128
+  epochs: 100
+  learning_rate: 0.001
+  patience: 10
+  min_delta: 0.0001
+  # Normalize per-target scales for Torch losses (recommended; keeps evaluation in RAW units).
+  normalize_targets: true
+
+# Output
+output:
+  results_dir: "baseline/results"
+  save_checkpoints: true
+  save_plots: true

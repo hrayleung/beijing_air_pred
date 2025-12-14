@@ -1,0 +1,169 @@
+2025-12-14 11:40:26,723 - INFO - ======================================================================
+2025-12-14 11:40:26,723 - INFO - PRSA PREPROCESSING PIPELINE v2.1
+2025-12-14 11:40:26,723 - INFO - Started: 2025-12-14 11:40:26.723663
+2025-12-14 11:40:26,723 - INFO - ======================================================================
+2025-12-14 11:40:26,723 - INFO - SCALE_TARGETS: False
+2025-12-14 11:40:26,723 - INFO - CAUSAL_IMPUTATION: True
+2025-12-14 11:40:26,723 - INFO - ======================================================================
+2025-12-14 11:40:26,723 - INFO - STEP 1: Loading raw data
+2025-12-14 11:40:26,723 - INFO - ======================================================================
+2025-12-14 11:40:26,774 - INFO -   Aotizhongxin: 35064 rows
+2025-12-14 11:40:26,818 - INFO -   Changping: 35064 rows
+2025-12-14 11:40:26,861 - INFO -   Dingling: 35064 rows
+2025-12-14 11:40:26,904 - INFO -   Dongsi: 35064 rows
+2025-12-14 11:40:26,944 - INFO -   Guanyuan: 35064 rows
+2025-12-14 11:40:26,985 - INFO -   Gucheng: 35064 rows
+2025-12-14 11:40:27,025 - INFO -   Huairou: 35064 rows
+2025-12-14 11:40:27,067 - INFO -   Nongzhanguan: 35064 rows
+2025-12-14 11:40:27,110 - INFO -   Shunyi: 35064 rows
+2025-12-14 11:40:27,154 - INFO -   Tiantan: 35064 rows
+2025-12-14 11:40:27,196 - INFO -   Wanliu: 35064 rows
+2025-12-14 11:40:27,238 - INFO -   Wanshouxigong: 35064 rows
+2025-12-14 11:40:27,260 - INFO -   Station order: ['Aotizhongxin', 'Changping', 'Dingling', 'Dongsi', 'Guanyuan', 'Gucheng', 'Huairou', 'Nongzhanguan', 'Shunyi', 'Tiantan', 'Wanliu', 'Wanshouxigong']
+2025-12-14 11:40:27,260 - INFO -   Total rows: 420768
+2025-12-14 11:40:27,265 - INFO - 
+======================================================================
+2025-12-14 11:40:27,265 - INFO - STEP 2: Cap value handling
+2025-12-14 11:40:27,265 - INFO - ======================================================================
+2025-12-14 11:40:27,482 - INFO -   Wanshouxigong/PM2.5: 1 cap values -> NaN
+2025-12-14 11:40:27,519 - INFO -   Changping/PM10: 1 cap values -> NaN
+2025-12-14 11:40:27,558 - INFO -   Guanyuan/PM10: 1 cap values -> NaN
+2025-12-14 11:40:27,610 - INFO -   Shunyi/PM10: 1 cap values -> NaN
+2025-12-14 11:40:27,673 - INFO -   Aotizhongxin/CO: 5 cap values -> NaN
+2025-12-14 11:40:27,687 - INFO -   Changping/CO: 2 cap values -> NaN
+2025-12-14 11:40:27,700 - INFO -   Dingling/CO: 1 cap values -> NaN
+2025-12-14 11:40:27,714 - INFO -   Dongsi/CO: 10 cap values -> NaN
+2025-12-14 11:40:27,728 - INFO -   Guanyuan/CO: 7 cap values -> NaN
+2025-12-14 11:40:27,742 - INFO -   Gucheng/CO: 3 cap values -> NaN
+2025-12-14 11:40:27,755 - INFO -   Huairou/CO: 3 cap values -> NaN
+2025-12-14 11:40:27,769 - INFO -   Nongzhanguan/CO: 6 cap values -> NaN
+2025-12-14 11:40:27,782 - INFO -   Shunyi/CO: 7 cap values -> NaN
+2025-12-14 11:40:27,796 - INFO -   Tiantan/CO: 5 cap values -> NaN
+2025-12-14 11:40:27,809 - INFO -   Wanliu/CO: 7 cap values -> NaN
+2025-12-14 11:40:27,825 - INFO - 
+======================================================================
+2025-12-14 11:40:27,825 - INFO - STEP 3: Feature engineering
+2025-12-14 11:40:27,825 - INFO - ======================================================================
+2025-12-14 11:40:27,999 - INFO -   Features (17): ['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'WSPM', 'wd_sin', 'wd_cos', 'hour_sin', 'hour_cos', 'month_sin', 'month_cos']
+2025-12-14 11:40:28,002 - INFO - 
+======================================================================
+2025-12-14 11:40:28,002 - INFO - STEP 4: Building raw tensor
+2025-12-14 11:40:28,002 - INFO - ======================================================================
+2025-12-14 11:40:28,289 - INFO -   Tensor shape: (35064, 12, 17)
+2025-12-14 11:40:28,299 - INFO -   Missing: 75,909 (1.06%)
+2025-12-14 11:40:28,320 - INFO - 
+======================================================================
+2025-12-14 11:40:28,321 - INFO - STEP 5: Time-based split (SPLIT-FIRST)
+2025-12-14 11:40:28,321 - INFO - ======================================================================
+2025-12-14 11:40:28,331 - INFO -   TRAIN: 26304 hours
+2025-12-14 11:40:28,335 - INFO -   VAL: 5880 hours
+2025-12-14 11:40:28,336 - INFO -   TEST: 2880 hours
+2025-12-14 11:40:28,336 - INFO - 
+======================================================================
+2025-12-14 11:40:28,336 - INFO - STEP 6: Computing TRAIN-only statistics
+2025-12-14 11:40:28,336 - INFO - ======================================================================
+2025-12-14 11:40:28,392 - INFO -   Computed medians shape: (12, 17)
+2025-12-14 11:40:28,392 - INFO - 
+======================================================================
+2025-12-14 11:40:28,392 - INFO - STEP 7-8: Imputation and Scaling
+2025-12-14 11:40:28,392 - INFO - ======================================================================
+2025-12-14 11:40:28,473 - INFO -     train_fit: Causal imputation, remaining NaN: 0
+2025-12-14 11:40:28,583 - INFO -   Input scaler fitted on shape: (315648, 17)
+2025-12-14 11:40:28,583 - INFO - 
+  Processing P1 (causal):
+2025-12-14 11:40:28,660 - INFO -     train: Causal imputation, remaining NaN: 0
+2025-12-14 11:40:28,707 - INFO -     val: Causal imputation, remaining NaN: 0
+2025-12-14 11:40:28,732 - INFO -     test: Causal imputation, remaining NaN: 0
+2025-12-14 11:40:28,734 - INFO - 
+  Processing P2 (non-causal):
+2025-12-14 11:40:28,998 - INFO -     train: Non-causal imputation (WARNING: uses future)
+2025-12-14 11:40:29,125 - INFO -     val: Non-causal imputation (WARNING: uses future)
+2025-12-14 11:40:29,209 - INFO -     test: Non-causal imputation (WARNING: uses future)
+2025-12-14 11:40:29,211 - INFO - 
+======================================================================
+2025-12-14 11:40:29,211 - INFO - STEP 9: Generating supervised windows
+2025-12-14 11:40:29,211 - INFO - ======================================================================
+2025-12-14 11:40:29,462 - INFO -   Target scaler: DISABLED (Y kept in original units)
+2025-12-14 11:40:29,462 - INFO - 
+  P1 windows:
+2025-12-14 11:40:32,591 - INFO -     train: X=(26113, 168, 12, 17), Y=(26113, 24, 12, 6) (Y RAW)
+2025-12-14 11:40:33,138 - INFO -     val: X=(5689, 168, 12, 17), Y=(5689, 24, 12, 6) (Y RAW)
+2025-12-14 11:40:33,384 - INFO -     test: X=(2689, 168, 12, 17), Y=(2689, 24, 12, 6) (Y RAW)
+2025-12-14 11:40:33,388 - INFO - 
+  P2 windows:
+2025-12-14 11:40:51,174 - INFO -     train: X=(26113, 168, 12, 17), Y=(26113, 24, 12, 6) (Y RAW)
+2025-12-14 11:40:56,333 - INFO -     val: X=(5689, 168, 12, 17), Y=(5689, 24, 12, 6) (Y RAW)
+2025-12-14 11:40:59,912 - INFO -     test: X=(2689, 168, 12, 17), Y=(2689, 24, 12, 6) (Y RAW)
+2025-12-14 11:40:59,916 - INFO - 
+======================================================================
+2025-12-14 11:40:59,916 - INFO - STEP 10: Creating LightGBM tabular data
+2025-12-14 11:40:59,916 - INFO - ======================================================================
+2025-12-14 11:40:59,916 - INFO -   FIX B: min_origin_idx = max(167, 168, 167) = 168
+2025-12-14 11:41:00,121 - INFO -     lgbm_train: Causal imputation, remaining NaN: 0
+2025-12-14 11:41:05,350 - INFO -   train: 313344 rows, 317 cols
+2025-12-14 11:41:05,350 - INFO -     valid_start=2013-03-08 00:00:00, valid_end=2016-02-28 23:00:00
+2025-12-14 11:41:05,376 - INFO -     lgbm_val: Causal imputation, remaining NaN: 0
+2025-12-14 11:41:06,471 - INFO -   val: 68256 rows, 317 cols
+2025-12-14 11:41:06,471 - INFO -     valid_start=2016-03-08 00:00:00, valid_end=2016-10-30 23:00:00
+2025-12-14 11:41:06,493 - INFO -     lgbm_test: Causal imputation, remaining NaN: 0
+2025-12-14 11:41:07,403 - INFO -   test: 32256 rows, 317 cols
+2025-12-14 11:41:07,403 - INFO -     valid_start=2016-11-08 00:00:00, valid_end=2017-02-27 23:00:00
+2025-12-14 11:41:07,406 - INFO - 
+======================================================================
+2025-12-14 11:41:07,406 - INFO - STEP 11: Building adjacency matrix (TRAIN only)
+2025-12-14 11:41:07,406 - INFO - ======================================================================
+2025-12-14 11:41:07,417 - INFO -   Top-k adjacency (k=4): 78 non-zero entries
+2025-12-14 11:41:07,418 - INFO - 
+======================================================================
+2025-12-14 11:41:07,418 - INFO - VALIDATION TESTS
+2025-12-14 11:41:07,418 - INFO - ======================================================================
+2025-12-14 11:41:07,418 - INFO - 
+  Test 1: X is scaled for pollutant channels
+2025-12-14 11:41:07,988 - INFO -     PASSED: X PM2.5 mean=0.27 (scaled)
+2025-12-14 11:41:07,988 - INFO - 
+  Test 2: No bfill used in causal imputation
+2025-12-14 11:41:07,988 - INFO -     PASSED: Verified by causal_impute assertions
+2025-12-14 11:41:07,988 - INFO - 
+  Test 3: Y equals raw targets (rigorous spot-check)
+2025-12-14 11:41:07,991 - INFO -     train: PASSED (200 samples checked)
+2025-12-14 11:41:07,994 - INFO -     val: PASSED (200 samples checked)
+2025-12-14 11:41:07,997 - INFO -     test: PASSED (200 samples checked)
+2025-12-14 11:41:07,997 - INFO - 
+  Test 4: Windows don't cross split boundaries
+2025-12-14 11:41:07,997 - INFO -     train: PASSED
+2025-12-14 11:41:07,997 - INFO -     val: PASSED
+2025-12-14 11:41:07,997 - INFO -     test: PASSED
+2025-12-14 11:41:07,997 - INFO - 
+  Test 5: Station order matches adjacency
+2025-12-14 11:41:07,997 - INFO -     PASSED: Adjacency (12, 12) matches 12 stations
+2025-12-14 11:41:07,997 - INFO - 
+======================================================================
+2025-12-14 11:41:07,997 - INFO - ALL VALIDATION TESTS PASSED ✓
+2025-12-14 11:41:07,997 - INFO - ======================================================================
+2025-12-14 11:41:07,997 - INFO - 
+======================================================================
+2025-12-14 11:41:07,997 - INFO - SAVING OUTPUTS
+2025-12-14 11:41:07,998 - INFO - ======================================================================
+2025-12-14 11:41:07,998 - INFO -   Saved: metadata.json, feature_list.json, target_list.json
+2025-12-14 11:45:07,331 - INFO -   Saved: P1_deep/train.npz - X:(26113, 168, 12, 17), Y:(26113, 24, 12, 6)
+2025-12-14 11:45:56,743 - INFO -   Saved: P1_deep/val.npz - X:(5689, 168, 12, 17), Y:(5689, 24, 12, 6)
+2025-12-14 11:46:19,444 - INFO -   Saved: P1_deep/test.npz - X:(2689, 168, 12, 17), Y:(2689, 24, 12, 6)
+2025-12-14 11:46:19,445 - INFO -   Saved: P1_deep/scaler.pkl, scaler_params.json
+2025-12-14 11:50:00,282 - INFO -   Saved: P2_simple/train.npz (includes Y_mask)
+2025-12-14 11:50:46,592 - INFO -   Saved: P2_simple/val.npz (includes Y_mask)
+2025-12-14 11:51:08,914 - INFO -   Saved: P2_simple/test.npz (includes Y_mask)
+2025-12-14 11:52:05,976 - INFO -   Saved: tabular_lgbm/lgbm_train.csv - 313344 rows
+2025-12-14 11:52:18,306 - INFO -   Saved: tabular_lgbm/lgbm_val.csv - 68256 rows
+2025-12-14 11:52:24,041 - INFO -   Saved: tabular_lgbm/lgbm_test.csv - 32256 rows
+2025-12-14 11:52:24,042 - INFO -   Saved: graphs/
+2025-12-14 11:52:24,043 - INFO -   Saved: reports/
+2025-12-14 11:52:24,043 - INFO -   Saved: README.md
+2025-12-14 11:52:24,043 - INFO - 
+======================================================================
+2025-12-14 11:52:24,043 - INFO - PIPELINE COMPLETE
+2025-12-14 11:52:24,043 - INFO - ======================================================================
+2025-12-14 11:52:24,043 - INFO -   train: 26113 samples
+2025-12-14 11:52:24,043 - INFO -   val: 5689 samples
+2025-12-14 11:52:24,043 - INFO -   test: 2689 samples
+2025-12-14 11:52:24,043 - INFO -   SCALE_TARGETS: False
+2025-12-14 11:52:24,044 - INFO -   Tests passed: True

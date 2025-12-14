@@ -1,0 +1,33 @@
+Horizon-variation sanity check: mean(|pred[h1]-pred[h24]|) per pollutant
+
+[lstm]
+  PM2.5  mean|h1-h24|: 3.092824
+  PM10   mean|h1-h24|: 1.406269
+  SO2    mean|h1-h24|: 2.570427
+  NO2    mean|h1-h24|: 3.135214
+  CO     mean|h1-h24|: 10.211827
+  O3     mean|h1-h24|: 3.390413
+
+[tcn]
+  PM2.5  mean|h1-h24|: 2.082746
+  PM10   mean|h1-h24|: 3.643987
+  SO2    mean|h1-h24|: 2.918212
+  NO2    mean|h1-h24|: 3.449314
+  CO     mean|h1-h24|: 41.977482
+  O3     mean|h1-h24|: 4.480576
+
+[stgcn]
+  PM2.5  mean|h1-h24|: 7.576261
+  PM10   mean|h1-h24|: 6.783292
+  SO2    mean|h1-h24|: 0.214621
+  NO2    mean|h1-h24|: 1.514921
+  CO     mean|h1-h24|: 1.738901
+  O3     mean|h1-h24|: 0.493879
+
+[gwnet]
+  PM2.5  mean|h1-h24|: 0.930343
+  PM10   mean|h1-h24|: 3.658060
+  SO2    mean|h1-h24|: 2.988754
+  NO2    mean|h1-h24|: 2.056458
+  CO     mean|h1-h24|: 0.613847
+  O3     mean|h1-h24|: 2.635038

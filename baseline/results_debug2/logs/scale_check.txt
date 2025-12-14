@@ -1,0 +1,49 @@
+Scale alignment check (masked by Y_mask==1)
+
+[naive]
+  PM2.5  y_true mean/std:   102.8634 /   111.6528  |  y_pred mean/std:   103.0267 /   111.6554
+  PM10   y_true mean/std:   125.5257 /   123.7734  |  y_pred mean/std:   125.6923 /   123.9684
+  SO2    y_true mean/std:    16.7591 /    16.5625  |  y_pred mean/std:    16.7844 /    16.5679
+  NO2    y_true mean/std:    64.2168 /    42.0664  |  y_pred mean/std:    64.2722 /    42.0207
+  CO     y_true mean/std:  1860.5226 /  1796.2791  |  y_pred mean/std:  1866.1892 /  1814.1185
+  O3     y_true mean/std:    28.9742 /    29.1021  |  y_pred mean/std:    28.7604 /    28.9721
+
+[seasonal]
+  PM2.5  y_true mean/std:   102.8634 /   111.6528  |  y_pred mean/std:   103.0351 /   111.8197
+  PM10   y_true mean/std:   125.5257 /   123.7734  |  y_pred mean/std:   125.5073 /   124.1423
+  SO2    y_true mean/std:    16.7591 /    16.5625  |  y_pred mean/std:    16.7478 /    16.5971
+  NO2    y_true mean/std:    64.2168 /    42.0664  |  y_pred mean/std:    64.1698 /    42.0305
+  CO     y_true mean/std:  1860.5226 /  1796.2791  |  y_pred mean/std:  1870.3026 /  1824.5278
+  O3     y_true mean/std:    28.9742 /    29.1021  |  y_pred mean/std:    28.6758 /    28.9273
+
+[lstm]
+  PM2.5  y_true mean/std:   102.8634 /   111.6528  |  y_pred mean/std:    57.1223 /     6.3109
+  PM10   y_true mean/std:   125.5257 /   123.7734  |  y_pred mean/std:    86.2373 /    12.5030
+  SO2    y_true mean/std:    16.7591 /    16.5625  |  y_pred mean/std:     9.8463 /     3.3421
+  NO2    y_true mean/std:    64.2168 /    42.0664  |  y_pred mean/std:    43.3998 /    12.1208
+  CO     y_true mean/std:  1860.5226 /  1796.2791  |  y_pred mean/std:   732.4291 /    30.1996
+  O3     y_true mean/std:    28.9742 /    29.1021  |  y_pred mean/std:    45.4612 /     7.2936
+
+[tcn]
+  PM2.5  y_true mean/std:   102.8634 /   111.6528  |  y_pred mean/std:   112.7216 /    69.4797
+  PM10   y_true mean/std:   125.5257 /   123.7734  |  y_pred mean/std:   145.8196 /    89.8241
+  SO2    y_true mean/std:    16.7591 /    16.5625  |  y_pred mean/std:    20.4831 /    13.3815
+  NO2    y_true mean/std:    64.2168 /    42.0664  |  y_pred mean/std:    70.8134 /    46.6228
+  CO     y_true mean/std:  1860.5226 /  1796.2791  |  y_pred mean/std:  1698.6021 /  1044.1881
+  O3     y_true mean/std:    28.9742 /    29.1021  |  y_pred mean/std:    45.5042 /    30.0093
+
+[stgcn]
+  PM2.5  y_true mean/std:   102.8634 /   111.6528  |  y_pred mean/std:    74.3299 /    37.0391
+  PM10   y_true mean/std:   125.5257 /   123.7734  |  y_pred mean/std:    95.4603 /    41.3807
+  SO2    y_true mean/std:    16.7591 /    16.5625  |  y_pred mean/std:    13.9661 /     8.7546
+  NO2    y_true mean/std:    64.2168 /    42.0664  |  y_pred mean/std:    52.9728 /    20.4375
+  CO     y_true mean/std:  1860.5226 /  1796.2791  |  y_pred mean/std:   764.9747 /   264.3717
+  O3     y_true mean/std:    28.9742 /    29.1021  |  y_pred mean/std:    24.1038 /    14.7671
+
+[gwnet]
+  PM2.5  y_true mean/std:   102.8634 /   111.6528  |  y_pred mean/std:    69.6001 /    11.2657
+  PM10   y_true mean/std:   125.5257 /   123.7734  |  y_pred mean/std:    96.9937 /    15.2508
+  SO2    y_true mean/std:    16.7591 /    16.5625  |  y_pred mean/std:    11.9571 /     2.2711
+  NO2    y_true mean/std:    64.2168 /    42.0664  |  y_pred mean/std:    53.3760 /     8.7362
+  CO     y_true mean/std:  1860.5226 /  1796.2791  |  y_pred mean/std:  1092.3473 /   169.9463
+  O3     y_true mean/std:    28.9742 /    29.1021  |  y_pred mean/std:    38.3270 /     6.7822

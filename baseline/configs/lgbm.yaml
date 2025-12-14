@@ -1,0 +1,35 @@
+# LightGBM Configuration
+seed: 42
+
+# Data paths
+data:
+  processed_dir: "processed"
+  p1_deep_dir: "processed/P1_deep"
+  tabular_dir: "processed/tabular_lgbm"
+  graphs_dir: "processed/graphs"
+
+# Task definition (FIXED)
+task:
+  lookback: 168
+  horizon: 24
+  num_stations: 12
+  num_targets: 6
+  targets: ["PM2.5", "PM10", "SO2", "NO2", "CO", "O3"]
+
+# LightGBM-specific parameters
+lgbm:
+  n_estimators: 200
+  max_depth: 8
+  learning_rate: 0.05
+  num_leaves: 31
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.8
+  random_state: 42
+  verbose: -1
+
+# Output
+output:
+  results_dir: "baseline/results"
+  save_checkpoints: true
+  save_plots: true

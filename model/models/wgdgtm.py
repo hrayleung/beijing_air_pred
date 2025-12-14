@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 
 import torch
 import torch.nn as nn
@@ -11,6 +11,8 @@ from model.modules.dynamic_graph import WindGatedDynamicGraphBuilder
 from model.modules.spatial_layer import SpatialMessagePassing
 from model.modules.tcn import TemporalConvNet
 from model.modules.horizon_decoder import HorizonDecoder
+from model.modules.multihead_decoder import MultiHeadHorizonDecoder
+from model.modules.residual_baseline import compute_persistence_baseline
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,8 @@ class WGDTMConfig:
     dec_h_emb_dim: int
     dec_hidden_dim: int
     dec_dropout: float
+    decoder_type: str = "shared"  # "shared" | "multihead"
+    use_residual_forecasting: bool = False
     assert_shapes: bool = False
 
 
@@ -51,6 +55,7 @@ class WGDGTM(nn.Module):
         A_static: torch.Tensor,
         wind_feature_indices: Dict[str, int],
         *,
+        target_feature_indices: Sequence[int],
         input_center: torch.Tensor,
         input_scale: torch.Tensor,
     ):
@@ -58,6 +63,7 @@ class WGDGTM(nn.Module):
         self.cfg = cfg
         self.register_buffer("A_static", A_static)
         self.wind_idx = wind_feature_indices
+        self.target_feature_indices = list(target_feature_indices)
         self.register_buffer("input_center", input_center)
         self.register_buffer("input_scale", input_scale)
 
@@ -88,14 +94,26 @@ class WGDGTM(nn.Module):
             dropout=cfg.tcn_dropout,
         )
 
-        self.decoder = HorizonDecoder(
-            d_in=cfg.tcn_channels,
-            horizon=cfg.horizon,
-            d_h=cfg.dec_h_emb_dim,
-            out_dim=cfg.num_targets,
-            hidden_dim=cfg.dec_hidden_dim,
-            dropout=cfg.dec_dropout,
-        )
+        if cfg.decoder_type == "multihead":
+            self.decoder = MultiHeadHorizonDecoder(
+                d_in=cfg.tcn_channels,
+                horizon=cfg.horizon,
+                d_h=cfg.dec_h_emb_dim,
+                num_targets=cfg.num_targets,
+                hidden_dim=cfg.dec_hidden_dim,
+                dropout=cfg.dec_dropout,
+            )
+        elif cfg.decoder_type == "shared":
+            self.decoder = HorizonDecoder(
+                d_in=cfg.tcn_channels,
+                horizon=cfg.horizon,
+                d_h=cfg.dec_h_emb_dim,
+                out_dim=cfg.num_targets,
+                hidden_dim=cfg.dec_hidden_dim,
+                dropout=cfg.dec_dropout,
+            )
+        else:
+            raise ValueError(f"Unknown decoder_type: {cfg.decoder_type}")
 
     def _wind_uvs(self, X: torch.Tensor) -> torch.Tensor:
         # X is input-scaled; unscale only the wind-related channels for physical gating.
@@ -129,7 +147,20 @@ class WGDGTM(nn.Module):
         y = self.tcn(z)  # (B*N, C, L)
         r_last = y[:, :, -1].reshape(B, N, self.cfg.tcn_channels)  # (B, N, C)
 
-        yhat = self.decoder(r_last)  # (B, H, N, D)
+        delta_hat = self.decoder(r_last)  # (B, H, N, D)
+
+        if self.cfg.use_residual_forecasting:
+            y_base = compute_persistence_baseline(
+                X,
+                horizon=self.cfg.horizon,
+                target_feature_indices=self.target_feature_indices,
+                input_center=self.input_center,
+                input_scale=self.input_scale,
+                assert_checks=self.cfg.assert_shapes,
+            )
+            yhat = y_base + delta_hat
+        else:
+            yhat = delta_hat
 
         if self.cfg.assert_shapes:
             assert yhat.shape == (B, self.cfg.horizon, self.cfg.num_nodes, self.cfg.num_targets)

@@ -38,7 +38,7 @@ def main():
         device = torch.device("cuda:0")
     else:
         device = torch.device("cpu")
-    results_dir = cfg["results"]["dir"]
+    results_dir = os.path.join(cfg["results"]["dir"], cfg["results"].get("experiment_name", "default"))
     os.makedirs(results_dir, exist_ok=True)
     if torch.cuda.is_available():
         gpu_count = torch.cuda.device_count()
@@ -50,6 +50,7 @@ def main():
     feature_list, target_list = load_feature_and_target_lists(cfg["data"]["processed_dir"])
     input_scaler = load_input_scaler(cfg["data"]["p1_deep_dir"])
     input_center_np, input_scale_np = input_scaler_center_scale(input_scaler)
+    target_feature_indices = [feature_list.index(t) for t in target_list]
     test_ds = PRSANPZDataset(os.path.join(cfg["data"]["p1_deep_dir"], "test.npz"))
     test_loader = DataLoader(test_ds, batch_size=int(cfg["training"]["batch_size"]), shuffle=False, num_workers=int(cfg["training"]["num_workers"]))
 
@@ -82,6 +83,8 @@ def main():
         dec_h_emb_dim=int(mcfg["decoder"]["horizon_emb_dim"]),
         dec_hidden_dim=int(mcfg["decoder"]["hidden_dim"]),
         dec_dropout=float(mcfg["decoder"]["dropout"]),
+        decoder_type=str(mcfg.get("decoder", {}).get("type", "shared")),
+        use_residual_forecasting=bool(mcfg.get("use_residual_forecasting", False)),
         assert_shapes=bool(cfg.get("debug", {}).get("assert_shapes", False)),
     )
 
@@ -89,6 +92,7 @@ def main():
         cfg_obj,
         A_static=A,
         wind_feature_indices=_wind_feature_indices(feature_list),
+        target_feature_indices=target_feature_indices,
         input_center=torch.tensor(input_center_np, device=device),
         input_scale=torch.tensor(input_scale_np, device=device),
     ).to(device)

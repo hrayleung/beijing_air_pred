@@ -46,6 +46,26 @@ The fused adjacency is:
 
 Spatial message passing is applied per time step, then a **dilated TCN** runs over time per station. A **horizon embedding** is used in the decoder so outputs differ by horizon and avoid collapsed constant forecasts.
 
+## Upgrades (Residual + Multi-head)
+
+### Residual forecasting over persistence
+
+Optionally, the model predicts residuals over a persistence baseline:
+
+- `y_base(t+h) = y(t)` for all `h=1..H` (computed from the **last lookback step** in `X`)
+- model predicts `Δ_hat(t+h)`
+- final prediction: `y_hat(t+h) = y_base(t+h) + Δ_hat(t+h)`
+
+`y_base` is computed in **raw units** by inverse-transforming only the 6 pollutant channels from `X[:, L-1]` using `processed/P1_deep/scaler.pkl`.
+
+Enable via `model.use_residual_forecasting: true`.
+
+### Multi-head decoder (one head per pollutant)
+
+To reduce cross-pollutant interference, the decoder can use one small head per pollutant and concatenate outputs to `(B,H,N,6)`.
+
+Enable via `model.decoder.type: "multihead"` (default remains `"shared"` in `model/configs/wgdgtm.yaml`).
+
 ## Loss / Metrics
 
 Training uses **pollutant-wise std-weighted masked MAE** (observed positions only):
@@ -55,3 +75,11 @@ Training uses **pollutant-wise std-weighted masked MAE** (observed positions onl
 - `loss = sum(mask * weight[d] * |pred - y|) / sum(mask)`
 
 Evaluation exports per-pollutant metrics (masked): MAE/RMSE/sMAPE and MAE at horizons {1,6,12,24}.
+
+## Sanity tests
+
+Run lightweight component checks:
+
+```bash
+python -m unittest -v model.tests.test_residual_multihead
+```

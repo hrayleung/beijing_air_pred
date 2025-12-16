@@ -357,6 +357,48 @@ WG‑DGTM 由五个模块组成（`model/models/wgdgtm.py`）：
 - `grad_clip=5.0`，早停 `patience=8`
 - 多 GPU：可见 GPU>1 时启用 `torch.nn.DataParallel`（`training.use_data_parallel=true`）
 
+### 5.5 现象驱动的两项改动：Residual forecasting 与 Multi‑head 输出
+
+WG‑DGTM 提供两项可选改动（`model/modules/residual_baseline.py`、`model/modules/multihead_decoder.py`）。其核心目的并非“为了更复杂”，而是针对已观测到的**现象与数据特性**补足短板、提高可解释性与训练稳定性。
+
+#### 5.5.1 Residual forecasting：相对 persistence 学习预测残差
+
+**动机（来自基线现象）**：基线结果表明短期（1–6 小时）污染物具有显著惯性，简单持久性在 `h=1` 上往往非常强。例如（TEST，masked）：
+- PM2.5：`naive_persistence` 的 `MAE_h1=13.46`，优于 LightGBM（20.94）与 TCN（33.92）。
+- CO：`naive_persistence` 的 `MAE_h1=318.09`，亦优于 LightGBM（453.58）与 TCN（840.67）。
+
+因此，将模型直接拟合 `y(t+h)` 等价于同时学习：
+(i) 容易的“惯性部分”（接近 `y(t)`）；(ii) 更难的“变化部分”（受风场输送、扩散、化学反应等影响）。Residual forecasting 将任务重参数化为：
+
+`ŷ(t+h) = y_base(t+h) + Δ̂(t+h)`，其中 `y_base(t+h)=y(t)`（persistence）。
+
+**预期收益**：残差 `Δ(t+h)` 在短期通常幅度更小、分布更平稳，有助于降低输出尺度、改善梯度条件数并提升优化稳定性；对量纲大且惯性强的 CO 尤其有利。
+
+**典型权衡**：若训练目标对 24 个 horizon 等权，残差学习会鼓励模型“贴近基线”，从而显著改善 `h=1/h=6`，但可能牺牲远期（如 `h=24`）对趋势/转折的刻画能力。本报告第 7.2.1 节中 residual+multihead 的“`h1` 大幅改善、`h24` 变差”正对应这一权衡。
+
+#### 5.5.2 Multi‑head output：每个污染物一个小输出头
+
+**动机（来自任务异质性）**：6 个污染物构成典型多任务学习问题，但其生成机理与统计尺度差异显著（例如 CO 量纲大且惯性强；O3 具有显著日周期并受光化学过程影响；PM2.5/PM10 更受输送与沉降影响）。共享输出头（shared head）在这种异质多任务下容易出现负迁移：某些污染物的梯度会干扰另一些污染物的拟合与校准。
+
+Multi‑head 的做法是“共享表征、分离映射”：
+- 共享骨干（动态图 + TCN）学习共同的时空结构；
+- 输出层对每个污染物使用独立的小 head（参数量小但更专门），降低跨污染物干扰并改善末端校准。
+
+从结果侧亦可观察到这种异质性：基线中 PM2.5/PM10/SO2 的最优模型更偏向 TCN，而 NO2/CO/O3 更偏向 LightGBM（见第 7.2.2 节表格），提示“单一共享映射”并非各目标的共同最优。
+
+#### 5.5.3 与实验结果的对应关系与改进方向
+
+在当前快照中，residual+multihead 显著改善短期宏平均误差（`macro_MAE@h1: 132.35 → 67.73`），但远期劣化（`macro_MAE@h24: 216.65 → 237.72`）。该现象与残差学习在 horizon 等权目标下偏向 persistence 的理论预期一致。可行的改进方向包括：
+- **horizon‑weighted loss / 分段权重**：提高远期 horizon 的损失权重，以平衡短期与远期性能；
+- **残差基线改造**：用季节性基线或更强的基线替代纯 persistence，以减少“贴基线”带来的远期偏置；
+- **head 容量与正则**：调整 multi‑head 的容量、dropout 与权重衰减，缓解过拟合与长步泛化退化。
+
+#### 5.5.4 学术化表述（可直接引用，中英对照）
+
+**中文（可直接写入论文/报告）**：基于基线实验所揭示的短期强惯性特征（例如 PM2.5 与 CO 在 `h=1` 下 persistence 已取得最优或近最优 MAE），我们将多步预测任务重新参数化为相对 persistence 的残差预测，即 \(\hat y_{t+h}=y_t+\widehat{\Delta}_{t+h}\)。该设定使模型聚焦于幅度更小、更平稳的变化项 \(\Delta_{t+h}\)，从而改善短期优化条件并提升 `h=1–6` 的预测精度；同时，鉴于 6 类污染物在生成机理、尺度与噪声结构上的显著异质性，我们采用“共享骨干 + 分污染物输出头”的 multi‑head 解码器以缓解负迁移并提升末端校准。实验上，该 residual+multihead 变体在短步宏平均误差上显著获益（`macro_MAE@h1: 132.35 → 67.73`），但也呈现远期误差劣化（`macro_MAE@h24: 216.65 → 237.72`）这一典型权衡，提示后续可通过 horizon‑weighted 损失或更强的残差基线来平衡中长步预测性能。
+
+**English (ready-to-use paragraph)**: Motivated by the strong short-term persistence observed in the baselines (e.g., persistence achieves the best or near-best MAE at `h=1` for PM2.5 and CO), we reparameterize multi-horizon forecasting as residual learning relative to persistence, \(\hat y_{t+h}=y_t+\widehat{\Delta}_{t+h}\). This formulation focuses the model on smaller and more stationary deviations \(\Delta_{t+h}\), stabilizing optimization and improving short-horizon accuracy (`h=1–6`). Moreover, given the pronounced heterogeneity across the six pollutants in terms of mechanisms, scales, and noise characteristics, we adopt a shared spatio-temporal backbone with pollutant-specific output heads (multi-head decoder) to mitigate negative transfer and improve calibration. Empirically, the residual+multihead variant yields a marked gain at short horizons (`macro_MAE@h1: 132.35 → 67.73`) but degrades long-horizon performance (`macro_MAE@h24: 216.65 → 237.72`), suggesting horizon-weighted objectives or stronger residual baselines as future remedies.
+
 ---
 
 ## 6. 实验流程（Procedures）与环境

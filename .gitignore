@@ -20,7 +20,6 @@ zips/
 *.zip
 
 # 其他
-eda_output/
 *.h5
 *.pkl
 *.pickle

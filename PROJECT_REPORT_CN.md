@@ -1,25 +1,30 @@
-# PRSA 北京多站点空气质量预测：从 EDA、预处理到基线与自定义模型（WG‑DGTM）的复现实验报告（v2.1）
+# PRSA 北京多站点空气质量预测实验报告（v2.1）
 
 ## 摘要
 
-本报告基于 UCI PRSA Beijing Multi‑Site Air Quality（2013–2017）数据集，系统给出：  
-(1) 数据特征分析（EDA）；(2) 无泄露预处理流水线（v2.1）；(3) 基线模型套件（B0–B6）训练与评估；(4) 自定义强模型 **WG‑DGTM**（Wind‑Gated Dynamic Graph + TCN）的设计动机、结构细节与实验结果。  
+本报告基于 UCI PRSA Beijing Multi‑Site Air Quality 数据集（2013–2017），完整记录了一个端到端的空气质量预测系统，包括：
+1. 探索性数据分析（EDA）
+2. 防数据泄露的预处理流程（v2.1）
+3. 七个基线模型（B0–B6）的训练与评估
+4. 自定义模型 **WG‑DGTM**（Wind‑Gated Dynamic Graph + TCN）的设计思路、实现细节与实验结果
 
-任务定义为：利用过去 7 天（`L=168` 小时）的多站点观测，预测未来 24 小时（`H=24`）12 个站点、6 类污染物（`D=6`）的浓度。所有指标均在 TEST 集上，且严格按 `Y_mask` 对缺失位置进行屏蔽（masked metrics）。  
+**核心任务**：利用过去 7 天（168 小时）的多站点观测数据，预测未来 24 小时内北京 12 个监测站的 6 种污染物浓度。所有评估指标都在测试集上计算，并严格使用 `Y_mask` 屏蔽缺失值（masked metrics）。
 
-在当前实验快照中，WG‑DGTM 在 **macro_MAE**（按污染物等权）上达到 **179.533**，优于最佳基线 LightGBM 的 **182.237**；且在 6 个污染物的 MAE 上均优于“对应污染物最佳基线”。详细结果与图表见第 7 节。
+**主要成果**：在当前实验中，WG‑DGTM 的 macro_MAE（各污染物等权平均）达到 **179.533**，优于最佳基线模型 LightGBM 的 **182.237**；并且在全部 6 种污染物上都超过了各自的最优基线。详细结果见第 7 节。
 
 ---
 
 ## 1. 数据集与任务定义
 
-### 1.1 数据来源与文件结构
+### 1.1 数据来源与基本信息
 
-原始数据位于 `PRSA_Data_20130301-20170228/`，包含 12 个站点 CSV（每站 35,064 行小时级记录；总计 420,768 行）。文件清单与列结构可由 `eda_output/station_summary.csv` 复核。时间范围为 **2013‑03‑01 00:00** 至 **2017‑02‑28 23:00**。
+数据集存放在 `PRSA_Data_20130301-20170228/` 目录下,包含北京 12 个监测站的空气质量数据。每个站点有一个 CSV 文件,记录了 35,064 条小时级别的观测数据,总计 420,768 行。数据时间跨度为 **2013 年 3 月 1 日 00:00** 至 **2017 年 2 月 28 日 23:00**,覆盖完整的 4 年。
 
-### 1.2 变量体系与单位
+完整的站点列表和数据结构可查看 `eda_output/station_summary.csv`。
 
-污染物（6，预测目标，顺序固定：`[PM2.5, PM10, SO2, NO2, CO, O3]`）：
+### 1.2 变量说明与单位
+
+**预测目标**（6 种污染物,顺序固定为 `[PM2.5, PM10, SO2, NO2, CO, O3]`）：
 
 | 变量 | 单位 | 说明 |
 |---|---|---|
@@ -27,39 +32,42 @@
 | PM10 | μg/m³ | 可吸入颗粒物 |
 | SO2 | μg/m³ | 二氧化硫 |
 | NO2 | μg/m³ | 二氧化氮 |
-| CO |（原数据单位）| 一氧化碳（量纲显著大于其他污染物） |
+| CO | μg/m³ | 一氧化碳（注意：数值量级远大于其他污染物,约为千位数） |
 | O3 | μg/m³ | 臭氧 |
 
-气象与其他输入变量：
-- 气象（5）：TEMP（°C）、PRES（hPa）、DEWP（°C）、RAIN（mm）、WSPM（m/s）。
-- 风向：原始为离散方位 `wd`，在预处理中编码为 `wd_sin`/`wd_cos`。
-- 时间周期特征：`hour_sin/hour_cos` 与 `month_sin/month_cos`（周期编码）。
+**输入特征**（气象与时间信息）：
+- **气象变量**（5 个）：温度 TEMP（°C）、气压 PRES（hPa）、露点温度 DEWP（°C）、降水量 RAIN（mm）、风速 WSPM（m/s）
+- **风向**：原始数据中为离散的方位角 `wd`,预处理时转换为连续的正弦/余弦编码 `wd_sin` 和 `wd_cos`
+- **时间周期特征**：小时的正弦/余弦编码 `hour_sin/hour_cos` 和月份的正弦/余弦编码 `month_sin/month_cos`,共 4 个特征
 
-### 1.3 固定任务参数
+### 1.3 任务参数设置
 
-| 参数 | 含义 | 取值 |
+整个项目使用统一的任务参数配置（详见 `processed/metadata.json`）：
+
+| 参数 | 说明 | 数值 |
 |---|---|---:|
-| `N` | 站点数 | 12 |
-| `L` | 输入窗口 | 168 小时 |
-| `H` | 预测步长 | 24 小时 |
-| `D` | 预测目标维度 | 6 |
-| `F` | 输入特征维度 | 17 |
+| `N` | 监测站点数量 | 12 |
+| `L` | 历史观测窗口（回看长度） | 168 小时（7 天） |
+| `H` | 预测时间跨度（预测步数） | 24 小时 |
+| `D` | 预测污染物种类数 | 6 |
+| `F` | 输入特征总维度 | 17 |
 
-任务与数据语义以 `processed/metadata.json` 为准。
+也就是说,我们用过去一周的数据来预测未来一天的污染物浓度。
 
 ---
 
-## 2. EDA：数据特征与统计结论（含必要图表）
+## 2. 探索性数据分析（EDA）
 
-EDA 由 `eda_beijing_air_quality.py` 实现，输出位于 `eda_output/`（含 `eda_report.html` 与多张 PNG/CSV）。本节总结与建模相关的关键统计结论。
+探索性分析由 `eda_beijing_air_quality.py` 完成,所有结果保存在 `eda_output/` 目录下（包括详细的 HTML 报告 `eda_report.html` 以及各类图表和统计表）。这里总结对建模最重要的几个发现。
 
-### 2.1 缺失值结构与分布
+### 2.1 缺失值分析
 
-缺失值分析结果来自 `eda_output/missingness_by_station_feature.csv`。总体规律为：
-- 缺失集中在污染物观测，气象变量缺失很少；
-- `wd`（风向）存在少量缺失，从而在派生的 `wd_sin/wd_cos` 上对应为缺失。
+从 `eda_output/missingness_by_station_feature.csv` 可以看到整体的缺失情况：
+- **污染物数据**的缺失率明显高于气象数据,这可能是由于监测设备故障或校准导致的
+- **气象数据**几乎完整,缺失率都在 0.1% 以下
+- **风向数据** `wd` 有少量缺失,导致衍生的 `wd_sin` 和 `wd_cos` 也相应缺失
 
-按“全站点聚合后的缺失率”统计（每特征共 12×35,064=420,768 个位置）：
+下表是所有站点合并后的缺失率统计（总共 12 个站点 × 35,064 小时 = 420,768 个数据点）：
 
 | 特征 | 缺失率(%) |
 |---|---:|
@@ -76,15 +84,15 @@ EDA 由 `eda_beijing_air_quality.py` 实现，输出位于 `eda_output/`（含 `
 | RAIN | 0.09 |
 | WSPM | 0.08 |
 
-缺失可视化（按站点×特征热力图）：
+**缺失值分布热力图**（按站点和特征）：
 
 ![](eda_output/missingness_analysis.png)
 
-### 2.2 描述统计：长尾分布与尺度差异
+### 2.2 数据分布特征
 
-`eda_output/stats_overall.csv` 给出全数据（跨站点聚合）统计量。污染物呈现明显长尾，且 CO 的数量级显著大于其他污染物（对损失函数与评估的尺度敏感性提出要求）。
+从 `eda_output/stats_overall.csv` 可以看到各污染物的基本统计量（所有站点合并）。有几个值得注意的地方：
 
-| 变量 | 均值 | 中位数(p50) | p95 | max |
+| 变量 | 均值 | 中位数 | 95分位数 | 最大值 |
 |---|---:|---:|---:|---:|
 | PM2.5 | 79.79 | 55 | 242 | 999 |
 | PM10 | 104.60 | 82 | 279 | 999 |
@@ -93,305 +101,423 @@ EDA 由 `eda_beijing_air_quality.py` 实现，输出位于 `eda_output/`（含 `
 | CO | 1230.77 | 900 | 3500 | 10000 |
 | O3 | 57.37 | 45 | 177 | 1071 |
 
-> 注：上述极大值包含传感器封顶值（如 999/10000），预处理阶段将其识别并置为 NaN（见第 3 节）。
+**关键观察**：
+- 所有污染物都呈现**长尾分布**（均值明显大于中位数）
+- **CO 的数值量级**是其他污染物的十倍以上（均值超过 1200 μg/m³,而其他污染物大多在几十到一百左右）,这对模型训练的损失函数设计提出了特殊要求
+- 表中的极大值（PM2.5=999、PM10=999、CO=10000）其实是传感器的测量上限,预处理时会将这些异常值转为缺失值（详见第 3 节）
 
-### 2.3 时序规律：季节性与日周期
+### 2.3 时间模式：季节性和日变化
 
-空气污染具有显著季节性（冬季更高、夏季更低），同时具备日周期结构：PM2.5 往往在夜间/清晨更高，O3 在下午更高（光化学反应更强）。该结构体现为长周期（季节）与短周期（日内）并存的多尺度时间依赖。
+北京的空气污染有非常明显的时间规律：
+- **季节性**：冬季污染明显加重（供暖排放增加）,夏季相对较轻
+- **日周期**：
+  - PM2.5 通常在夜间和清晨浓度较高
+  - O3 在下午达到峰值（阳光强度增加,光化学反应更活跃）
+
+这种长周期（季节）和短周期（日内）叠加的模式,意味着模型需要能够捕捉多尺度的时间依赖关系。
+
+**分布和季节性可视化**：
 
 ![](eda_output/distributions_seasonality.png)
 
-### 2.4 空间异质性：站点差异与相关结构
+### 2.4 站点间的差异和关联
 
-站点间均值与方差存在差异：例如 PM2.5 均值最低的站点为 Dingling（65.99），最高为 Dongsi（86.19）；CO 均值最低为 Dingling（904.90），最高为 Wanshouxigong（1370.40）（见 `eda_output/stats_by_station.csv`）。这提示空间建模需要同时考虑“站点固有差异”与“跨站点耦合”。
+**站点异质性**：不同站点的污染水平差异明显。比如从 `eda_output/stats_by_station.csv` 可以看到：
+- PM2.5 均值：Dingling 最低（65.99 μg/m³）,Dongsi 最高（86.19 μg/m³）
+- CO 均值：Dingling 最低（904.90 μg/m³）,Wanshouxigong 最高（1370.40 μg/m³）
 
-站点对比图：
+这说明建模时既要考虑各站点的独特性,也要捕捉站点之间的相互影响。
+
+**站点对比图**：
 
 ![](eda_output/station_comparison.png)
 
-站点相关结构（示例：PM2.5 相关矩阵）：
+**站点相关性**（以 PM2.5 为例）：
 
 ![](eda_output/correlation_matrix.png)
 
+从相关矩阵可以看出,站点之间的 PM2.5 浓度有较强的正相关,这为使用图神经网络等方法提供了依据。
+
 ---
 
-## 3. 预处理方法（v2.1，严格防泄露）
+## 3. 数据预处理流程（v2.1）
 
-预处理脚本为 `preprocessing_pipeline_v2.1.py`，输出至 `processed/`，关键约定见 `processed/README.md` 与日志 `processed/reports/preprocessing_log.txt`。本节按流水线步骤给出可复核的细节说明。
+预处理是整个系统的关键环节,实现在 `preprocessing_pipeline_v2.1.py` 中。所有处理后的数据保存在 `processed/` 目录,详细的处理日志在 `processed/reports/preprocessing_log.txt`,设计说明见 `processed/README.md`。
 
-### 3.1 设计原则（Leakage‑safe）
+### 3.1 核心设计原则：严格防止数据泄露
 
-1. **Split‑first**：先按时间边界切分 train/val/test，再做插补、缩放、图构建与窗口生成，避免未来信息泄露。  
-2. **TRAIN‑only 统计量**：插补回填值（中位数）与缩放器（RobustScaler）仅由 TRAIN 拟合。  
-3. **图构建仅用 TRAIN**：站点图结构由 TRAIN 的相关统计构建。  
-4. **窗口不跨边界**：监督窗口生成严格在 split 内完成。
+在时间序列预测中,"数据泄露"是一个非常容易犯的错误——不小心使用了未来的信息。我们的预处理流程严格遵循以下原则：
 
-### 3.2 Step‑by‑Step 处理细节与可复核数值
+1. **先划分、后处理**（Split-first）：首先按时间划分训练集/验证集/测试集,然后再做任何插补、归一化、图构建等操作。这样可以确保验证集和测试集绝对看不到训练集之外的信息。
 
-**Step 1：加载原始数据**  
-- 每站点 35,064 小时记录，总计 420,768 行（见 `processed/reports/preprocessing_log.txt`）。  
-- 站点顺序固定为字母序，并贯穿所有输出（见 `processed/metadata.json` 的 `station_list`）。
+2. **只用训练集的统计量**：所有需要拟合的参数（比如缺失值插补的中位数、RobustScaler 的缩放参数）都只从训练集计算,然后应用到所有数据集。
 
-**Step 2：封顶值（cap values）识别与处理**  
-为避免传感器封顶（例如 `PM2.5=999`、`PM10=999`、`CO=10000`）对统计与训练造成偏置，将这些值转为 `NaN`。本次快照共识别到 61 个封顶值（明细见 `processed/reports/cap_values_report.csv`），例如：
+3. **图结构也只用训练集**：站点之间的相关性图（邻接矩阵）也只基于训练集的数据构建。
 
-| 站点 | 变量 | cap 值 | 数量 |
+4. **窗口不跨越边界**：生成训练样本时,严格保证每个窗口只使用对应数据集内的数据,不会跨越训练/验证/测试的时间边界。
+
+### 3.2 详细处理步骤
+
+下面按照流水线的执行顺序,逐步说明每个处理环节（所有数值都可以从日志 `processed/reports/preprocessing_log.txt` 中核对）：
+
+**步骤 1：加载原始数据**
+- 读取 12 个站点的 CSV 文件,每个站点 35,064 条小时级记录,总计 420,768 行
+- 站点按字母顺序排列,这个顺序在整个系统中保持一致（见 `processed/metadata.json` 中的 `station_list`）
+
+**步骤 2：处理传感器上限值**
+传感器测量有上限,当污染物浓度超过测量范围时会记录为固定的上限值（比如 PM2.5=999、PM10=999、CO=10000）。这些值不能直接参与计算,需要转换为缺失值（`NaN`）。
+
+本次数据中识别出 61 个上限值（详见 `processed/reports/cap_values_report.csv`）：
+
+| 站点 | 污染物 | 上限值 | 数量 |
 |---|---|---:|---:|
 | Wanshouxigong | PM2.5 | 999 | 1 |
-| Changping / Guanyuan / Shunyi | PM10 | 999 | 1×3 |
-| 多站点 | CO | 10000 | 合计 57 |
+| Changping / Guanyuan / Shunyi | PM10 | 999 | 各1,共3 |
+| 多个站点 | CO | 10000 | 合计 57 |
 
-**Step 3：特征工程（17 维输入特征）**  
-输出特征顺序见 `processed/feature_list.json`，包括：
-- 风向编码：`wd` 映射为角度后取 `sin/cos`（`wd_sin`/`wd_cos`），以保持方向的连续性；
-- 时间周期编码：  
-  `hour_sin = sin(2π·hour/24)`，`hour_cos = cos(2π·hour/24)`；  
-  `month_sin = sin(2π·month/12)`，`month_cos = cos(2π·month/12)`。
+**步骤 3：特征工程**
+构建 17 维输入特征（完整列表见 `processed/feature_list.json`）：
+- **风向编码**：原始的离散风向 `wd` 转换为角度,再计算正弦和余弦（`wd_sin` 和 `wd_cos`）。这样可以保持方向的连续性,比如北偏西 359° 和北偏东 1° 在数值上是相近的。
+- **时间周期编码**：
+  - 小时：`hour_sin = sin(2π × hour/24)`, `hour_cos = cos(2π × hour/24)`
+  - 月份：`month_sin = sin(2π × month/12)`, `month_cos = cos(2π × month/12)`
 
-**Step 4：构建原始张量（time × station × feature）**  
-构建 `data_tensor` 形状为 `(T=35064, N=12, F=17)`；缺失总量为 **75,909**，占 **1.06%**（见 `processed/reports/preprocessing_log.txt`）。
+  这种编码方式可以让模型理解时间的周期性（比如 23 点和 0 点其实很接近）。
 
-**Step 5：时间切分（Split‑first）**  
-边界与长度（小时）：
-- TRAIN：26,304 小时（2013‑03‑01 至 2016‑02‑29）  
-- VAL：5,880 小时（2016‑03‑01 至 2016‑10‑31）  
-- TEST：2,880 小时（2016‑11‑01 至 2017‑02‑28）
+**步骤 4：构建三维数据张量**
+将数据组织成 `(时间, 站点, 特征)` 的三维张量,形状为 `(35064, 12, 17)`。
+此时张量中共有 **75,909 个缺失值**,占总数据点的 **1.06%**。
 
-**Step 6：TRAIN‑only 中位数统计（用于插补回填）**  
-对 TRAIN 内每个站点×特征计算中位数，得到 `medians` 形状 `(12,17)`（见 `preprocessing_pipeline_v2.1.py` 中 `compute_train_statistics`）。
+**步骤 5：划分训练/验证/测试集**（这是关键的防泄露步骤）
+按时间顺序划分：
+- **训练集**：26,304 小时（2013-03-01 至 2016-02-29,约 3 年）
+- **验证集**：5,880 小时（2016-03-01 至 2016-10-31,约 8 个月）
+- **测试集**：2,880 小时（2016-11-01 至 2017-02-28,约 4 个月）
 
-**Step 7：缺失插补（两条管线）**
+**步骤 6：计算训练集的统计量**
+对训练集的每个站点和每个特征计算中位数,得到一个 `(12, 17)` 的中位数表。这些中位数后续会用于填补缺失值的"兜底"（当前向填充无法填补时使用）。
 
-- **P1（深度学习/严格因果）**：`causal_impute`  
-  - 仅使用 **forward‑fill**（向前填充），不允许 back‑fill；  
-  - 对序列开头仍缺失的位置使用 TRAIN 中位数回填；  
-  - 同时输出观测掩码 `mask = 1[not NaN]`。  
+**步骤 7：缺失值填补**（提供两种策略）
 
-- **P2（简单基线/非因果）**：`non_causal_impute`  
-  - 线性插值（`limit=6`）+ ffill + bfill；  
-  - 该路径会使用未来信息（仅用于简单基线的便利性），但 **仍输出 `Y_mask`**（v2.1 FIX C），以保证评估时屏蔽缺失。
+我们生成了两个版本的数据,适用于不同类型的模型：
 
-**Step 8：缩放（RobustScaler）**
-- 对输入 `X` 使用 RobustScaler（基于中位数与 IQR），仅在 TRAIN 拟合后应用到 val/test。  
-- 形式化地：`x_scaled = (x - median_train) / IQR_train`，其中 `IQR_train = q75_train - q25_train`。  
-- 本次快照 `SCALE_TARGETS=False`，即 `Y` 以原始单位存储（见 `processed/metadata.json` 与 `processed/P1_deep/scaler_params.json`）。  
-- 若未来启用 `SCALE_TARGETS=True`，v2.1 约定只在 `Y_mask==1` 的位置缩放目标，避免“缺失 0 值”被错误缩放（见 `preprocessing_pipeline_v2.1.py` 的 `apply_target_scaler`）。
+- **P1_deep（严格因果填补）**：用于深度学习模型
+  - 只使用**前向填充**（forward-fill）：用之前最近的观测值填补缺失
+  - **不使用后向填充**（backward-fill）：这样可以保证不会偷看未来的信息
+  - 如果序列开头就缺失（无法前向填充）,则用训练集的中位数兜底
+  - 同时生成**掩码** `mask`,标记哪些是真实观测(1),哪些是填补值(0)
 
-**Step 9：监督窗口生成（L=168, H=24）**
-窗口约定（以 `t` 为 origin 时刻、为输入最后一个时间点）：
-- `X` 覆盖 `[t-L+1, …, t]`
-- `Y` 覆盖 `[t+1, …, t+H]`
+- **P2_simple（非因果填补）**：用于简单基线模型
+  - 使用线性插值（最多跨 6 个时间步）+ 前向填充 + 后向填充
+  - 这种方法会用到"未来"的信息,但对于简单的统计模型更方便
+  - **注意**：虽然填补时用了未来信息,但评估时仍然使用 `Y_mask` 屏蔽缺失位置,保证公平性
 
-输出形状（以 P1 为例）：
-- `X`：`(samples, 168, 12, 17)`（scaled）
-- `Y`：`(samples, 24, 12, 6)`（raw；缺失位置置 0）
-- `Y_mask`：同形状（缺失屏蔽）
+**步骤 8：数据归一化**
+- 使用 **RobustScaler** 对输入特征 `X` 进行归一化
+  - 公式：`x_scaled = (x - median_train) / IQR_train`
+  - 其中 IQR 是四分位距（75分位数 - 25分位数）
+- **关键**：缩放器只在训练集上拟合,然后应用到验证集和测试集
+- **目标值 `Y` 保持原始单位**（不缩放）,方便解释和评估
+- 缩放参数保存在 `processed/P1_deep/scaler_params.json`
 
-样本数（见 `processed/reports/preprocessing_log.txt`）：
-- train：26,113  
-- val：5,689  
-- test：2,689
+**步骤 9：生成训练样本窗口**
+这一步将连续的时间序列切分成固定长度的输入-输出对：
+- **输入窗口 `X`**：过去 168 小时（7 天）的观测,形状 `(samples, 168, 12, 17)`
+  - 168 = 时间步, 12 = 站点数, 17 = 特征数
+  - 注意：这里的数据已经过归一化
+- **输出窗口 `Y`**：未来 24 小时的 6 种污染物浓度,形状 `(samples, 24, 12, 6)`
+  - 24 = 预测步数, 12 = 站点数, 6 = 污染物数
+  - 注意：这里保持原始单位,缺失位置填 0
+- **掩码 `Y_mask`**：标记 `Y` 中哪些是真实值(1),哪些是缺失值(0)
 
-**Step 10：LightGBM 表格数据（严格因果）**
-输出至 `processed/tabular_lgbm/`，特征包含：
-- 滞后特征：`lag_k = x(t-k)`，并明确 **不包含 lag0**；
-- 滚动统计：`roll{w}_mean/std`（因果滚动窗口）；
-- 时间特征：hour/month sin/cos + dayofweek；
-- `station`（类别特征）与 `station_id`。
+最终生成的样本数：
+- 训练集：26,113 个样本
+- 验证集：5,689 个样本
+- 测试集：2,689 个样本
 
-为避免早期样本因 lag/roll 不足导致 NaN 污染，valid_start 使用：  
-`min_origin_idx = max(L-1, max_lag, max_roll)`（见日志 FIX B）。  
-本快照输出规模（见 `processed/reports/preprocessing_log.txt`）：
-- train：313,344 行，317 列  
-- val：68,256 行  
-- test：32,256 行
+**步骤 10：为 LightGBM 生成表格数据**
+LightGBM 不使用序列,而是使用展平的表格数据。我们为它单独生成了特征（保存在 `processed/tabular_lgbm/`）：
+- **滞后特征**：`lag_1, lag_2, lag_3, lag_6, lag_12, lag_24, lag_48, lag_72, lag_168`（注意**不包括 lag_0**,避免泄露）
+- **滚动统计**：过去 24/72/168 小时的均值和标准差
+- **时间特征**：小时/月份的正弦余弦编码 + 星期几
+- **站点信息**：站点名称和ID
 
-**Step 11：站点图构建（TRAIN only）**
-以 TRAIN 的 PM2.5 Pearson 相关构建图：
-- 生成 full correlation（12×12）与 top‑k（k=4）稀疏图；
-- 仅保留正相关边（可复核 `preprocessing_pipeline_v2.1.py` 的 `GRAPH_USE_POSITIVE_ONLY` 逻辑）；
-- 对角置 1，并保持对称写入。  
-日志显示 top‑k 图非零项为 78（含对角；见 `processed/reports/preprocessing_log.txt`）。
+生成的表格规模：
+- 训练集：313,344 行 × 317 列
+- 验证集：68,256 行
+- 测试集：32,256 行
 
-**Step 12：验证测试（必过）**
-v2.1 自带一致性检查（见 `processed/reports/preprocessing_log.txt`）：
-1. `X` 确实已缩放；  
-2. 因果插补无 back‑fill；  
-3. `Y` 与 raw 目标严格一致（200 样本抽检）；  
-4. 窗口不跨 split；  
-5. 站点顺序与邻接矩阵轴一致。
+**步骤 11：构建站点关系图**
+为图神经网络模型构建邻接矩阵（只使用训练集数据）：
+- 计算训练集中各站点 PM2.5 的 Pearson 相关系数
+- 为每个站点保留相关性最高的 k=4 个邻居（top-k 稀疏图）
+- 只保留正相关的边
+- 对角线设为 1（自环）,矩阵保持对称
+- 最终邻接矩阵有 78 个非零元素（包括 12 个对角线元素）
+
+**步骤 12：数据完整性校验**
+预处理流程内置了多项自动检查（结果记录在日志中）：
+1. 输入 `X` 确实已经归一化
+2. 因果填补确实没有使用后向填充
+3. 目标 `Y` 和原始数据一致（随机抽查 200 个样本）
+4. 样本窗口没有跨越数据集边界
+5. 站点顺序在所有文件中一致
+
+所有检查都通过后,预处理才算完成。
 
 ---
 
-## 4. 基线模型套件（B0–B6）：方法与协议
+## 4. 基线模型（B0–B6）
 
-### 4.1 模型列表与数据来源
+### 4.1 模型清单
 
-| 编号 | 模型 | 输入数据 | 备注 |
+我们实现了 7 个基线模型,涵盖从简单统计到深度学习的不同复杂度：
+
+| 编号 | 模型名称 | 使用的数据 | 简要说明 |
 |---:|---|---|---|
-| B0 | Naive Persistence | `processed/P1_deep` | `y(t+h)=y(t)`（对 scaled 输入做逆变换） |
-| B1 | Seasonal Naive 24h | `processed/P1_deep` | `y(t+h)=y(t+h-24)`（对 scaled 输入做逆变换） |
-| B2 | LightGBM | `processed/tabular_lgbm` | 多输出（24×6）预测 |
-| B3 | LSTM（Direct） | `processed/P1_deep` | 端到端多步 |
-| B4 | TCN | `processed/P1_deep` | 因果卷积 |
-| B5 | STGCN | `processed/P1_deep` + `graphs` | 固定图 |
-| B6 | Graph WaveNet | `processed/P1_deep` + `graphs` | 自适应图 |
+| B0 | Naive Persistence | `processed/P1_deep` | 最简单的基线：假设未来等于现在 `y(t+h)=y(t)` |
+| B1 | Seasonal Naive 24h | `processed/P1_deep` | 季节性基线：假设未来等于昨天同一时刻 `y(t+h)=y(t+h-24)` |
+| B2 | LightGBM | `processed/tabular_lgbm` | 梯度提升树,使用滞后和滚动特征 |
+| B3 | LSTM | `processed/P1_deep` | 长短期记忆网络,直接输出 24 步预测 |
+| B4 | TCN | `processed/P1_deep` | 时间卷积网络,使用因果扩张卷积 |
+| B5 | STGCN | `processed/P1_deep` + `graphs` | 时空图卷积网络,使用固定的站点关系图 |
+| B6 | Graph WaveNet | `processed/P1_deep` + `graphs` | 图小波网络,可以学习自适应的站点关系 |
 
-> 注：预处理同时产出 `processed/P2_simple`（非因果插补，可能引入未来信息），但仓库当前基线入口 `baseline/scripts/run.py` 默认读取 `processed/P1_deep` 以保持严格因果设定。
+**说明**：
+- 所有基线统一使用 `processed/P1_deep`（严格因果填补）,确保不会使用未来信息
+- Naive 和 Seasonal Naive 需要将归一化后的输入转回原始单位再进行预测
+- 图模型（STGCN 和 Graph WaveNet）额外使用预先构建的站点邻接矩阵
 
-### 4.2 评估协议（Masked metrics）
+### 4.2 评估方法
 
-基线评估入口：`baseline/evaluation/evaluate.py`。预测、标签与掩码形状必须一致：`(S, 24, 12, 6)`。  
-指标均按掩码 `Y_mask` 屏蔽（见 `baseline/evaluation/masked_metrics.py`），并包含“多步输出差异检查”（避免输出在 24 个 horizon 上坍塌为常数）。
+所有模型的评估统一在 `baseline/evaluation/evaluate.py` 中进行,关键要点：
 
-指标定义（设预测为 `ŷ`，真实值为 `y`，掩码为 `m∈{0,1}`）：
-- `MAE = Σ(|ŷ-y|·m) / Σ(m)`
-- `RMSE = sqrt( Σ((ŷ-y)^2·m) / Σ(m) )`
-- `sMAPE = 100 · Σ( |ŷ-y|/(|ŷ|+|y|+ε) · m ) / Σ(m)`
+**输出格式**：所有模型的预测结果必须是 `(样本数, 24, 12, 6)` 的形状
 
-macro 指标（`macro_MAE/macro_RMSE/macro_sMAPE`）为上述指标在 6 个污染物维度上的简单平均（等权）。
+**掩码机制**：由于数据中有缺失值（在张量中用 0 表示）,计算指标时**必须使用掩码 `Y_mask` 排除缺失位置**。否则会把缺失的 0 值也算进去,导致指标不准确。
 
-### 4.3 基线复现命令
+**评估指标**（假设预测值为 ŷ,真实值为 y,掩码为 m）：
+- **MAE**（平均绝对误差）：`Σ(|ŷ-y| × m) / Σ(m)`
+- **RMSE**（均方根误差）：`sqrt(Σ((ŷ-y)² × m) / Σ(m))`
+- **sMAPE**（对称平均绝对百分比误差）：`100 × Σ(|ŷ-y|/(|ŷ|+|y|+ε) × m) / Σ(m)`
+
+**宏平均指标**：由于 CO 的数值量级远大于其他污染物,直接计算的 MAE/RMSE 会被 CO 主导。因此我们还计算了 `macro_MAE`、`macro_RMSE` 和 `macro_sMAPE`,即先算每个污染物的指标,再取平均,给予每种污染物相同的权重。
+
+### 4.3 如何运行基线模型
 
 ```bash
-# EDA
+# 第一步：运行数据分析
 python eda_beijing_air_quality.py
 
-# 预处理
+# 第二步：数据预处理
 python preprocessing_pipeline_v2.1.py
 
-# 运行全部基线（多卡 DataParallel）
+# 第三步：训练所有基线模型（如果有多张 GPU 会自动并行）
 unset CUDA_VISIBLE_DEVICES
 python -m baseline.scripts.run --model all --config baseline/configs/default.yaml
 ```
 
 ---
 
-## 5. 自定义模型 WG‑DGTM：设计动机、结构细节与训练策略
+## 5. 自定义模型 WG-DGTM
 
-自定义模型实现位于 `model/`，训练与评估入口分别为：
+自定义模型的代码在 `model/` 目录下,可以通过以下命令训练和评估：
 - 训练：`python -m model.scripts.run_train --config model/configs/wgdgtm.yaml`
-- 评估：`python -m model.scripts.run_eval --config model/configs/wgdgtm.yaml --ckpt <path>`
+- 评估：`python -m model.scripts.run_eval --config model/configs/wgdgtm.yaml --ckpt <checkpoint路径>`
 
-### 5.1 为什么要这样设计（动机与归纳偏置）
+### 5.1 设计思路：为什么要这样做？
 
-WG‑DGTM 的设计围绕 PRSA 任务的三个核心挑战：
+WG-DGTM（Wind-Gated Dynamic Graph + TCN Model）的设计针对这个任务的三个核心难点：
 
-1. **时空耦合（Spatial coupling）**  
-   多站点污染物并非独立：区域排放与扩散导致站点间强相关（见第 2.4 节相关矩阵）。因此需要图结构或等价的跨站点信息传播机制。
+**难点 1：站点之间有相互影响**
 
-2. **传播方向与时变性（Directed & time‑varying transport）**  
-   固定相关图只能刻画“长期平均耦合”，无法表达“随时间变化的传播方向”，而风速/风向是污染传输的重要驱动。故引入 **动态有向图**，并用风场对其进行门控（wind gating），把物理先验注入模型。
+从第 2.4 节的相关性分析可以看出,不同站点的污染物浓度并不独立——某个区域排放增加或者风向改变,都会影响周边站点。所以模型需要能够捕捉站点之间的关系,这就是为什么要用**图结构**来表示站点网络。
 
-3. **长序列 + 直接多步预测（L=168, H=24）**  
-   7 天输入窗口要求长感受野且必须保持因果性；多步输出若缺少 horizon 条件，容易出现 **horizon collapse**（不同预测步输出趋同）。因此采用 **扩张因果 TCN** 作为时序主干，并使用 **horizon embedding** 作为解码条件。
+**难点 2：站点之间的影响会随时间和风向变化**
 
-此外，污染物尺度高度不均（CO 的量级远大于其他污染物）。若直接用未加权 MAE 训练，梯度将被 CO 主导，导致其他污染物性能受损。因此 WG‑DGTM 使用 **按污染物标准差加权的 masked MAE** 训练，兼顾尺度公平与缺失屏蔽。
+固定的图结构（比如只用历史平均相关性）有个问题：它假设站点之间的关系是恒定的。但实际上,污染物的传播方向和强度会随着风向和风速变化。比如今天刮北风,污染物就会从北边的站点传到南边的站点；明天刮南风,方向就反过来了。
 
-上述动机在 `model/DESIGN_NOTE.md` 中给出更集中的阐述。
+为了解决这个问题,我们引入了**动态有向图**,并且用**风场信息来调控图的连接**（wind gating）。这样模型就能根据实时的风速风向调整站点之间的影响强度和方向。
 
-### 5.2 模型总体结构（精确定义）
+**难点 3：需要预测未来 24 小时,而且不能让所有时刻的预测都一样**
 
-输入/输出：
-- 输入 `X`：`(B, L=168, N=12, F=17)`（scaled）
-- 输出 `Ŷ`：`(B, H=24, N=12, D=6)`（raw）
+输入是过去 7 天（168 小时）的数据,输出是未来 24 小时的预测,这要求模型：
+- 有足够长的"记忆"（感受野）来看到 7 天前的信息
+- 能够区分"1 小时后"和"24 小时后"这些不同的预测时刻,否则容易出现 **horizon collapse**（所有时刻预测成一样的值）
 
-严格设定（Setting A）：模型仅使用 lookback 窗口内的历史特征，不引入未来气象/协变量；因此可在相同信息集下与基线公平对比（见 `model/README.md`）。
+我们的解决方案是：
+- 使用**扩张因果卷积**（TCN）作为时间建模的主干,可以高效地覆盖长时间窗口
+- 在解码器中加入**horizon embedding**,为每个预测时刻提供独特的"身份标识",避免预测坍缩
 
-WG‑DGTM 由五个模块组成（`model/models/wgdgtm.py`）：
+**难点 4：CO 的数值太大了**
 
-1. **特征编码器**（`model/modules/feature_encoder.py`）  
-   对每个时间步与站点做逐点编码：  
-   `h(t,i) = Dropout(GELU(LayerNorm(Wx·x(t,i))))`
+从第 2 节可以看到,CO 的均值是 1200+ μg/m³,而其他污染物大多在几十到一百左右。如果直接用 MAE 训练,模型的梯度会被 CO 主导,导致其他污染物学不好。
 
-2. **风门控动态有向图构建**（`model/modules/dynamic_graph.py`）  
-   在每个时间步构建邻接矩阵 `A_t`，由三部分融合：
-   - 静态先验图 `A_static`：由 TRAIN 的相关 top‑k 图得到（预处理输出 `processed/graphs/adjacency_corr_topk.npy`）；
-   - 可学习图 `A_learn`：由站点嵌入 `E` 生成：`A_learn = softmax(E E^T)`；
-   - 动态图 `A_dyn(t)`：由节点状态注意力生成：  
-     `A_dyn(t) = softmax( (Wq h(t)) (Wk h(t))^T / sqrt(d) + λ·g(t) )`  
-     其中 `g(t,i)` 为风门控标量（见 5.3）。
+解决办法是使用**标准差加权的损失函数**：先计算每种污染物在训练集上的标准差,然后用 `1/std` 作为权重。这样 CO 虽然绝对误差大,但因为权重小,不会主导训练过程。
 
-	   最终融合（并保证权重正、便于优化）：
+更详细的设计说明可以查看 `model/DESIGN_NOTE.md`。
 
-	   `A_t = RowNormalize( softplus(α)·A_static + softplus(β)·A_learn + softplus(γ)·A_dyn(t) + I )`
+### 5.2 模型架构
 
-	   设计理由（Why this fusion）：`A_static` 提供稳健空间先验并降低过拟合风险；`A_learn` 弥补固定相关图无法表达的长期残差关系；`A_dyn(t)` 使连边随状态与风场自适应变化以刻画时变传播；`softplus` 约束融合权重为正以提升可解释性与训练稳定性；加入 `I` 保证自环；`RowNormalize` 将每行视为“从源节点出发的权重分布”，可稳定消息传递并便于解释为有向扩散强度。
+**输入输出**：
+- 输入 `X`：形状 `(批次, 168小时, 12站点, 17特征)`,数据已归一化
+- 输出 `Ŷ`：形状 `(批次, 24小时, 12站点, 6污染物)`,原始单位
 
-3. **空间消息传递**（`model/modules/spatial_layer.py`）  
-   在每个时间步进行有向传播：  
-   `z(t) = (A_t · h(t)) · W_s`
+**重要约束**：模型只使用过去 168 小时的历史数据,不偷看未来的气象信息,这样才能与基线公平对比。
 
-4. **时间主干：扩张因果 TCN**（`model/modules/tcn.py`）  
-   将 `z(t,i)` 视为每站点序列，使用多层 dilation=2^l 的因果卷积块获得长感受野；取最后时刻表征 `r_last(i)` 用于解码。
+WG-DGTM 包含五个核心模块（实现在 `model/models/wgdgtm.py`）：
 
-5. **horizon‑aware 解码器**（`model/modules/horizon_decoder.py`）  
-   为每个预测步 `h` 引入可学习嵌入 `e_h`，以条件化输出并避免多步坍塌：  
-   `Ŷ(t+h,i) = MLP([r_last(i), e_h])`
+**1. 特征编码器**（`model/modules/feature_encoder.py`）
 
-可选升级：
-- **Residual forecasting**（`model/modules/residual_baseline.py`）：输出预测残差并叠加持久性基线 `y(t)`；
-- **Multi‑head decoder**（`model/modules/multihead_decoder.py`）：每个污染物一个小 head，降低跨污染物负迁移。
+把每个站点、每个时刻的 17 维原始特征转换成高维表示：
+```
+h(t,i) = Dropout(GELU(LayerNorm(线性层(x(t,i)))))
+```
 
-### 5.3 风门控（wind gating）的物理含义与实现细节
+**2. 风门控动态图构建**（`model/modules/dynamic_graph.py`）
 
-预处理输入为 scaled 值，但风门控需要物理意义一致的量纲。WG‑DGTM 在前向中仅对风相关通道进行逆缩放（`model/models/wgdgtm.py::_wind_uvs`），并计算：
-- `u = WSPM · wd_cos`，`v = WSPM · wd_sin`
-- `g(t,i) = sigmoid(MLP([u, v, WSPM])) ∈ (0,1)`
+这是模型的核心创新。对于每个时刻 t,构建一个动态的站点关系图 `A_t`,由三部分融合：
 
-随后将 `λ·g(t,i)` 作为“从节点 i 出发的注意力偏置”加入 dynamic attention logits，实现方向性与强度的时变调制（详见 `model/DESIGN_NOTE.md`）。
+- **静态图** `A_static`：从训练集的站点相关性得到,提供稳定的空间结构先验
+- **可学习图** `A_learn`：从可训练的站点嵌入生成,可以学到静态相关性没有捕捉到的长期关系
+- **动态图** `A_dyn(t)`：基于当前时刻的站点状态和风场信息动态计算,能够反映实时的传播方向
 
-### 5.4 损失函数、权重与优化设置
+三个图按可学习的权重融合：
+```
+A_t = 行归一化(α·A_static + β·A_learn + γ·A_dyn(t) + I)
+```
+其中 α、β、γ 经过 softplus 激活保证为正,I 是单位矩阵（保证自环）。
 
-训练损失：**std‑weighted masked MAE**（`model/losses/masked_losses.py`）：
+**为什么要这样融合？**
+- 静态图提供稳健的基础,防止过拟合
+- 可学习图补充静态图的不足
+- 动态图让模型能够根据风场调整传播路径
+- 行归一化后,每一行可以理解为"从这个站点出发,污染物传播到其他站点的概率分布"
 
-- 在 TRAIN 的观测位置（`Y_mask==1`）上计算每污染物标准差 `std[d]`；
-- 权重定义：`w[d] = 1 / (std[d] + eps)`；
-- 损失：
-  `Loss = sum( |Ŷ - Y| · Y_mask · w ) / sum(Y_mask)`
+**3. 空间消息传递**（`model/modules/spatial_layer.py`）
 
-本次快照的 `std/weights` 输出于 `model/results/metrics/target_std_weights.json`（示例：CO 的 `std≈1125.53`，对应权重显著更小，从而避免训练被 CO 主导）。
+利用动态图在站点之间传递信息：
+```
+z(t) = 图邻接矩阵 · h(t) · 线性层
+```
+简单说就是：每个站点的表示会受到邻居站点的影响,影响权重由动态图决定。
 
-训练器：`model/training/trainer.py`（AdamW、梯度裁剪、早停）。默认配置见 `model/configs/wgdgtm.yaml`：
-- `epochs=50`，`batch_size=64`，`lr=1e-3`，`weight_decay=1e-4`
-- `grad_clip=5.0`，早停 `patience=8`
-- 多 GPU：可见 GPU>1 时启用 `torch.nn.DataParallel`（`training.use_data_parallel=true`）
+**4. 时间主干：TCN**（`model/modules/tcn.py`）
 
-### 5.5 现象驱动的两项改动：Residual forecasting 与 Multi‑head 输出
+把每个站点看作一个独立的时间序列,用扩张因果卷积来捕捉长期依赖：
+- 因果卷积保证不会看到未来
+- 扩张卷积（dilation = 1, 2, 4, 8, ...）可以用很少的层数覆盖很长的时间窗口
+- 提取最后时刻的表示 `r_last(i)` 用于预测
 
-WG‑DGTM 提供两项可选改动（`model/modules/residual_baseline.py`、`model/modules/multihead_decoder.py`）。其核心目的并非“为了更复杂”，而是针对已观测到的**现象与数据特性**补足短板、提高可解释性与训练稳定性。
+**5. Horizon-aware 解码器**（`model/modules/horizon_decoder.py`）
 
-#### 5.5.1 Residual forecasting：相对 persistence 学习预测残差
+为了避免"horizon collapse"（24 个预测时刻输出都一样）,为每个预测时刻 h 创建一个可学习的"身份标识" `e_h`：
+```
+预测(h小时后,站点i) = MLP([r_last(i), e_h])
+```
 
-**动机（来自基线现象）**：基线结果表明短期（1–6 小时）污染物具有显著惯性，简单持久性在 `h=1` 上往往非常强。例如（TEST，masked）：
-- PM2.5：`naive_persistence` 的 `MAE_h1=13.46`，优于 LightGBM（20.94）与 TCN（33.92）。
-- CO：`naive_persistence` 的 `MAE_h1=318.09`，亦优于 LightGBM（453.58）与 TCN（840.67）。
+**可选升级**：
+- **Residual forecasting**：不直接预测未来值,而是预测"未来值 - 当前值"的残差
+- **Multi-head decoder**：每个污染物用独立的小解码器,减少相互干扰
 
-因此，将模型直接拟合 `y(t+h)` 等价于同时学习：
-(i) 容易的“惯性部分”（接近 `y(t)`）；(ii) 更难的“变化部分”（受风场输送、扩散、化学反应等影响）。Residual forecasting 将任务重参数化为：
+### 5.3 风门控的实现
 
-`ŷ(t+h) = y_base(t+h) + Δ̂(t+h)`，其中 `y_base(t+h)=y(t)`（persistence）。
+风门控是让模型能够利用风场信息的关键。虽然输入数据已经归一化,但风门控需要使用物理意义明确的风速风向值,所以模型会先把风相关的特征转回原始单位（代码见 `model/models/wgdgtm.py` 的 `_wind_uvs` 方法）：
 
-**预期收益**：残差 `Δ(t+h)` 在短期通常幅度更小、分布更平稳，有助于降低输出尺度、改善梯度条件数并提升优化稳定性；对量纲大且惯性强的 CO 尤其有利。
+1. 计算风场的向量分量：
+   - `u = WSPM × cos(wd)`（东西方向分量）
+   - `v = WSPM × sin(wd)`（南北方向分量）
 
-**典型权衡**：若训练目标对 24 个 horizon 等权，残差学习会鼓励模型“贴近基线”，从而显著改善 `h=1/h=6`，但可能牺牲远期（如 `h=24`）对趋势/转折的刻画能力。本报告第 7.2.1 节中 residual+multihead 的“`h1` 大幅改善、`h24` 变差”正对应这一权衡。
+2. 通过一个小神经网络计算门控值：
+   ```
+   g(t,i) = sigmoid(MLP([u, v, WSPM]))
+   ```
+   这个 g 值在 0 到 1 之间,表示风对站点 i 的影响强度
 
-#### 5.5.2 Multi‑head output：每个污染物一个小输出头
+3. 把门控值加到动态图的注意力计算中,这样风向和风速就能影响站点之间的连接强度
 
-**动机（来自任务异质性）**：6 个污染物构成典型多任务学习问题，但其生成机理与统计尺度差异显著（例如 CO 量纲大且惯性强；O3 具有显著日周期并受光化学过程影响；PM2.5/PM10 更受输送与沉降影响）。共享输出头（shared head）在这种异质多任务下容易出现负迁移：某些污染物的梯度会干扰另一些污染物的拟合与校准。
+更多细节见 `model/DESIGN_NOTE.md`。
 
-Multi‑head 的做法是“共享表征、分离映射”：
-- 共享骨干（动态图 + TCN）学习共同的时空结构；
-- 输出层对每个污染物使用独立的小 head（参数量小但更专门），降低跨污染物干扰并改善末端校准。
+### 5.4 训练配置
 
-从结果侧亦可观察到这种异质性：基线中 PM2.5/PM10/SO2 的最优模型更偏向 TCN，而 NO2/CO/O3 更偏向 LightGBM（见第 7.2.2 节表格），提示“单一共享映射”并非各目标的共同最优。
+**损失函数**（`model/losses/masked_losses.py`）：
 
-#### 5.5.3 与实验结果的对应关系与改进方向
+为了解决 CO 主导梯度的问题,使用**标准差加权的 masked MAE**：
 
-在当前快照中，residual+multihead 显著改善短期宏平均误差（`macro_MAE@h1: 132.35 → 67.73`），但远期劣化（`macro_MAE@h24: 216.65 → 237.72`）。该现象与残差学习在 horizon 等权目标下偏向 persistence 的理论预期一致。可行的改进方向包括：
-- **horizon‑weighted loss / 分段权重**：提高远期 horizon 的损失权重，以平衡短期与远期性能；
-- **残差基线改造**：用季节性基线或更强的基线替代纯 persistence，以减少“贴基线”带来的远期偏置；
-- **head 容量与正则**：调整 multi‑head 的容量、dropout 与权重衰减，缓解过拟合与长步泛化退化。
+1. 先在训练集的观测值上计算每种污染物的标准差 `std[d]`
+2. 权重定义为 `w[d] = 1 / (std[d] + ε)`
+3. 损失计算：
+   ```
+   Loss = Σ(|预测 - 真实| × 掩码 × 权重) / Σ(掩码)
+   ```
+
+具体数值见 `model/results/metrics/target_std_weights.json`。比如 CO 的标准差约为 1125,所以权重很小,而其他污染物标准差只有几十,权重就大得多。这样训练时各污染物的贡献就相对平衡了。
+
+**优化器和训练设置**（配置文件：`model/configs/wgdgtm.yaml`）：
+
+- 优化器：AdamW
+  - 学习率：0.001
+  - 权重衰减：0.0001
+- 批次大小：64
+- 训练轮数：最多 50 轮
+- 梯度裁剪：最大梯度范数 5.0
+- 早停：验证集性能连续 8 轮不提升则停止
+- 多 GPU：如果有多张 GPU 会自动使用 DataParallel
+
+### 5.5 两个可选的升级方案
+
+我们还实现了两个升级版本（代码在 `model/modules/residual_baseline.py` 和 `model/modules/multihead_decoder.py`）。这不是为了炫技,而是针对实验中观察到的具体问题提出的针对性改进。
+
+#### 5.5.1 Residual Forecasting：预测变化而非绝对值
+
+**为什么要这样做？**
+
+从基线实验可以看到,简单的 Naive Persistence（假设未来=现在）在短期预测上表现很好：
+- PM2.5：Naive Persistence 的 h=1 误差只有 13.46,比 LightGBM(20.94) 和 TCN(33.92) 都好
+- CO：Naive Persistence 的 h=1 误差是 318.09,也优于 LightGBM(453.58) 和 TCN(840.67)
+
+这说明污染物有很强的**惯性**——短期内不会突然大幅变化。
+
+既然如此,让模型直接预测未来的绝对值就有点"绕弯路"了,因为它需要同时学：
+1. 容易的部分：保持现状（惯性）
+2. 困难的部分：预测变化（受风场、排放、化学反应等复杂因素影响）
+
+**Residual forecasting 的思路**是：把这两部分分开,让模型只负责学"困难的部分"：
+```
+预测值 = 基线值（当前值） + 模型预测的残差
+```
+
+**好处**：残差（变化量）通常比绝对值小得多,也更平稳,对 CO 这种大数值的污染物尤其有用。
+
+**代价**：模型可能会过度依赖基线,在短期预测上很准,但长期预测时缺乏对趋势变化的把握。这在我们的实验中得到了验证：h=1 大幅改善,但 h=24 变差了。
+
+#### 5.5.2 Multi-head Decoder：每种污染物独立输出
+
+**为什么要这样做？**
+
+6 种污染物的特性很不一样：
+- CO 数值大、惯性强
+- O3 有明显的日周期（白天光化学反应）
+- PM2.5/PM10 主要受输送和沉降影响
+
+如果用一个共享的输出层,某些污染物的梯度可能会"干扰"其他污染物的学习,这就是**负迁移**问题。
+
+基线实验也支持这个观察：PM2.5/PM10/SO2 的最优模型是 TCN,而 NO2/CO/O3 的最优模型是 LightGBM（见 7.2.2 节）。这说明不同污染物确实有不同的"偏好"。
+
+**Multi-head 的解决方案**：
+- 骨干网络（动态图 + TCN）是共享的,学习通用的时空模式
+- 输出层为每种污染物创建一个独立的小网络,各管各的,减少相互干扰
+
+#### 5.5.3 实验观察和后续改进方向
+
+Residual + Multi-head 版本在短期表现很好（h=1 的 macro_MAE 从 132.35 降到 67.73）,但长期变差了（h=24 从 216.65 升到 237.72）。
+
+这符合理论预期：残差学习偏向于"跟随基线",所以短期准但长期弱。
+
+**可能的改进方向**：
+- **调整损失函数权重**：给长期预测（h=12, h=24）更大的权重,迫使模型不要只盯着短期
+- **改用更强的基线**：比如用 Seasonal Naive（昨天同一时刻）替代简单的 Persistence
+- **调整 Multi-head 的容量和正则化**：减少过拟合,提升长期泛化
 
 #### 5.5.4 学术化表述（可直接引用，中英对照）
 
@@ -431,16 +557,18 @@ python -m model.scripts.run_eval  --config model/configs/wgdgtm.yaml --ckpt mode
 
 ---
 
-## 7. 结果与分析（TEST 集，Masked 指标 + 图表）
+## 7. 实验结果（测试集）
 
-### 7.1 基线结果（B0–B6）
+所有结果都在测试集上评估,并严格使用掩码排除缺失值。
 
-基线输出目录：`baseline/results/`。核心汇总表：
-- `baseline/results/model_comparison.csv`（overall 指标 + 关键 horizon MAE）
-- `baseline/results/metrics_overall.csv`（含 macro 平均）
-- `baseline/results/metrics_per_pollutant.csv`（按污染物）
+### 7.1 基线模型表现
 
-**Overall 指标对比（来自 `baseline/results/model_comparison.csv`）：**
+基线模型的完整结果保存在 `baseline/results/` 目录下,主要包括：
+- `baseline/results/model_comparison.csv`：总体指标对比
+- `baseline/results/metrics_overall.csv`：包含宏平均指标
+- `baseline/results/metrics_per_pollutant.csv`：分污染物的详细指标
+
+**整体指标对比**：
 
 | 模型 | MAE ↓ | RMSE ↓ | sMAPE(%) ↓ | MAE@h1 ↓ | MAE@h6 ↓ | MAE@h12 ↓ | MAE@h24 ↓ |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -452,7 +580,7 @@ python -m model.scripts.run_eval  --config model/configs/wgdgtm.yaml --ckpt mode
 | seasonal_naive_24h | 254.928 | 747.602 | 39.49 | 254.494 | 254.583 | 254.923 | 255.227 |
 | stgcn | 333.515 | 1030.602 | 46.92 | 333.646 | 333.867 | 333.394 | 333.377 |
 
-由于 CO 量纲显著大于其他污染物，overall MAE/RMSE 容易被 CO 误差主导。为衡量“各污染物等权”的整体性能，可使用 macro 指标（按污染物平均；见 `baseline/results/metrics_overall.csv`）：
+需要注意的是,上表的 MAE 和 RMSE 会被 CO 的大数值主导（因为 CO 的误差动辄几百,而其他污染物只有几十）。为了更公平地评估"模型对所有污染物的综合表现",我们计算了**宏平均指标**（先算每个污染物的指标,再平均）：
 
 | 模型 | macro_MAE ↓ | macro_RMSE ↓ | macro_sMAPE(%) ↓ |
 |---|---:|---:|---:|
@@ -463,6 +591,12 @@ python -m model.scripts.run_eval  --config model/configs/wgdgtm.yaml --ckpt mode
 | gwnet | 251.325 | 376.730 | 39.474 |
 | seasonal_naive_24h | 256.660 | 364.831 | 39.481 |
 | stgcn | 335.951 | 477.210 | 46.974 |
+
+从宏平均指标可以看出：
+- **LightGBM 是最好的基线**,macro_MAE 为 182.237
+- Naive Persistence 在短期（h=1）表现很好,但长期性能下降明显
+- TCN 的宏平均表现与 Naive Persistence 接近
+- 图神经网络（STGCN 和 GWNet）在这个任务上没有明显优势,可能是因为固定图结构不够灵活
 
 **MAE‑H 曲线（所有基线）：**  
 ![](baseline/results/plots/all_models_mae_vs_horizon.png)
@@ -478,34 +612,38 @@ python -m model.scripts.run_eval  --config model/configs/wgdgtm.yaml --ckpt mode
 ![](baseline/results/plots/lightgbm_sample_predictions.png)
 ![](baseline/results/plots/seasonal_naive_sanity.png)
 
-### 7.2 自定义模型 WG‑DGTM：TEST 指标与可视化
+### 7.2 WG-DGTM 模型表现
 
-#### 7.2.1 Macro 指标（按污染物等权）
+WG-DGTM 的评估结果保存在 `model/results/**/metrics/` 目录：
+- 原始版本：`model/results/metrics/macro_avg_metrics.csv`
+- 升级版（residual+multihead）：`model/results/wgdgtm_residual_multihead/metrics/macro_avg_metrics.csv`
 
-WG‑DGTM 评估输出目录：`model/results/**/metrics/`。macro 汇总见：
-- 原始 WG‑DGTM：`model/results/metrics/macro_avg_metrics.csv`
-- residual+multihead：`model/results/wgdgtm_residual_multihead/metrics/macro_avg_metrics.csv`
+#### 7.2.1 宏平均指标对比
 
-| run | macro_MAE ↓ | macro_RMSE ↓ | macro_sMAPE(%) ↓ |
+| 模型版本 | macro_MAE ↓ | macro_RMSE ↓ | macro_sMAPE(%) ↓ |
 |---|---:|---:|---:|
-| WG‑DGTM | 179.533 | 269.082 | 29.422 |
-| WG‑DGTM (residual+multihead) | 184.897 | 278.924 | 30.026 |
+| WG-DGTM | 179.533 | 269.082 | 29.422 |
+| WG-DGTM (residual+multihead) | 184.897 | 278.924 | 30.026 |
 
-为解释不同 horizon 行为，可将关键 horizon 的 per‑pollutant `MAE_h*` 取均值得到 `macro_MAE_h*`：
+**关键发现**：原始版本的 WG-DGTM 在宏平均 MAE 上达到 **179.533**,**优于最佳基线 LightGBM 的 182.237**。
 
-| 模型 | macro_MAE ↓ | macro_MAE@h1 ↓ | macro_MAE@h6 ↓ | macro_MAE@h12 ↓ | macro_MAE@h24 ↓ |
+为了理解不同预测时刻的表现,我们进一步查看关键时刻（h=1, 6, 12, 24）的宏平均 MAE：
+
+| 模型 | macro_MAE ↓ | h=1 ↓ | h=6 ↓ | h=12 ↓ | h=24 ↓ |
 |---|---:|---:|---:|---:|---:|
 | lightgbm（最佳基线） | 182.237 | 87.819 | 156.200 | 189.895 | 227.379 |
-| WG‑DGTM | 179.533 | 132.354 | 155.645 | 182.838 | 216.645 |
+| WG-DGTM | 179.533 | 132.354 | 155.645 | 182.838 | 216.645 |
 | residual+multihead | 184.897 | 67.734 | 155.974 | 193.889 | 237.722 |
 
-> 该对比提示：residual+multihead 显著改善短期（h=1）宏平均误差，但在长步（h=24）上劣化；原始 WG‑DGTM 则在中长步更优，从而整体 macro_MAE 更低。
+**分析**：
+- **原始 WG-DGTM**：在中长期（h=6 到 h=24）都优于 LightGBM,整体宏平均最优
+- **Residual+multihead 版本**：短期（h=1）表现非常出色（67.7 vs LightGBM 的 87.8）,但长期（h=24）性能下降。这是残差学习的典型权衡——它擅长学习小幅度的短期变化,但在长期趋势预测上可能不如直接预测
 
-#### 7.2.2 按污染物指标与对比（MAE）
+#### 7.2.2 各污染物的详细表现
 
-原始 WG‑DGTM 的 per‑pollutant 指标见 `model/results/metrics/metrics_per_pollutant.csv`：
+WG-DGTM 在每种污染物上的 MAE（单位：μg/m³）：
 
-| 污染物 | WG‑DGTM MAE ↓ |
+| 污染物 | WG-DGTM MAE |
 |---|---:|
 | PM2.5 | 52.279 |
 | PM10 | 60.752 |
@@ -514,27 +652,31 @@ WG‑DGTM 评估输出目录：`model/results/**/metrics/`。macro 汇总见：
 | CO | 916.276 |
 | O3 | 15.678 |
 
-与 LightGBM（最佳 overall 基线）相比，WG‑DGTM 在全部污染物上均有改善（单位为原始单位）：
+**与 LightGBM 对比**（全部 6 种污染物都有提升）：
 
-| 污染物 | LightGBM | WG‑DGTM | Δ（WG‑DGTM−LightGBM） |
+| 污染物 | LightGBM | WG-DGTM | 改善幅度 |
 |---|---:|---:|---:|
-| PM2.5 | 56.505 | 52.279 | -4.226 |
-| PM10 | 65.302 | 60.752 | -4.550 |
-| SO2 | 9.411 | 9.187 | -0.224 |
-| NO2 | 23.949 | 23.023 | -0.926 |
-| CO | 922.082 | 916.276 | -5.806 |
-| O3 | 16.171 | 15.678 | -0.493 |
+| PM2.5 | 56.505 | 52.279 | **-4.226** |
+| PM10 | 65.302 | 60.752 | **-4.550** |
+| SO2 | 9.411 | 9.187 | **-0.224** |
+| NO2 | 23.949 | 23.023 | **-0.926** |
+| CO | 922.082 | 916.276 | **-5.806** |
+| O3 | 16.171 | 15.678 | **-0.493** |
 
-进一步地，以“每个污染物的最优基线”作为参照（PM2.5/PM10/SO2 的最佳基线为 TCN，其余为 LightGBM），WG‑DGTM 仍实现一致的小幅提升：
+**与各污染物的最优基线对比**：
 
-| 污染物 | 最优基线 | 最优基线 MAE | WG‑DGTM MAE | Δ（WG‑DGTM−最优基线） |
+有趣的是,不同污染物的最优基线并不相同。PM2.5、PM10 和 SO2 的最优基线是 TCN,而 NO2、CO 和 O3 的最优基线是 LightGBM。这反映了不同污染物的时间动态特性不同。
+
+即使与各自的最优基线相比,WG-DGTM 仍然在所有污染物上都实现了提升：
+
+| 污染物 | 最优基线模型 | 最优基线 MAE | WG-DGTM MAE | 改善幅度 |
 |---|---|---:|---:|---:|
-| PM2.5 | tcn | 52.795 | 52.279 | -0.515 |
-| PM10 | tcn | 61.877 | 60.752 | -1.124 |
-| SO2 | tcn | 9.305 | 9.187 | -0.118 |
-| NO2 | lightgbm | 23.949 | 23.023 | -0.926 |
-| CO | lightgbm | 922.082 | 916.276 | -5.806 |
-| O3 | lightgbm | 16.171 | 15.678 | -0.493 |
+| PM2.5 | TCN | 52.795 | 52.279 | **-0.515** |
+| PM10 | TCN | 61.877 | 60.752 | **-1.124** |
+| SO2 | TCN | 9.305 | 9.187 | **-0.118** |
+| NO2 | LightGBM | 23.949 | 23.023 | **-0.926** |
+| CO | LightGBM | 922.082 | 916.276 | **-5.806** |
+| O3 | LightGBM | 16.171 | 15.678 | **-0.493** |
 
 三模型对比（LightGBM / TCN / WG‑DGTM，按污染物 MAE）：
 
@@ -568,8 +710,21 @@ residual+multihead：
 
 ---
 
-## 8. 结论
+## 8. 总结
 
-1. 数据层面：污染物缺失率显著高于气象变量；分布具长尾且 CO 量纲远大于其他污染物；存在强季节性与日周期；站点间既有异质性也有显著耦合。  
-2. 方法层面：v2.1 预处理通过 split‑first、TRAIN‑only 统计量与严格窗口约定实现无泄露；`Y_mask` 的引入保证缺失位置不会污染训练与评估。  
-3. 结果层面：基线中 LightGBM 在 overall MAE 上最优；自定义 WG‑DGTM 在 macro_MAE 上进一步提升，并在 6 个污染物 MAE 上均优于对应最佳基线，体现出“风门控动态有向图 + TCN”的有效性。residual+multihead 可显著改善短期，但在本快照中牺牲了长步预测性能。
+**数据特征**：
+- 污染物数据的缺失率（1-5%）明显高于气象数据（< 0.1%）
+- 所有污染物都呈现长尾分布,CO 的数值量级（均值 1230 μg/m³）远大于其他污染物（几十到一百左右）
+- 北京空气污染有明显的季节性（冬高夏低）和日周期（PM2.5 夜高,O3 午高）
+- 不同站点既有各自的特点,也存在较强的空间相关性
+
+**方法设计**：
+- 预处理流程（v2.1）通过"先划分再处理"、"只用训练集统计量"、"严格的窗口生成"等措施,彻底避免了数据泄露
+- 掩码机制（`Y_mask`）确保缺失值不会影响模型训练和评估的准确性
+- 标准差加权的损失函数解决了 CO 主导梯度的问题,让模型能够平衡地学习所有污染物
+
+**实验结果**：
+- 在 7 个基线模型中,**LightGBM 表现最好**（macro_MAE = 182.237）
+- 自定义的 **WG-DGTM 进一步提升了性能**（macro_MAE = 179.533）,并且在**全部 6 种污染物上都超过了各自的最优基线**
+- 这验证了"风门控动态图 + TCN"的设计是有效的：动态图能够根据风场调整站点之间的影响,TCN 能够高效地捕捉长时间依赖
+- Residual+multihead 升级版在短期预测（h=1）上表现出色,但牺牲了长期性能,这提示可以通过调整损失函数（比如给不同预测时刻不同权重）来平衡短期和长期表现

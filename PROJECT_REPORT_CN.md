@@ -58,7 +58,23 @@
 
 ## 2. 探索性数据分析（EDA）
 
-探索性分析由 `eda_beijing_air_quality.py` 完成,所有结果保存在 `eda_output/` 目录下（包括详细的 HTML 报告 `eda_report.html` 以及各类图表和统计表）。这里总结对建模最重要的几个发现。
+探索性分析由 `eda_beijing_air_quality.py` 完成,所有结果保存在 `eda_output/` 目录下（包括详细的 HTML 报告 `eda_report.html` 以及各类图表和统计表）。
+
+**主要输出文件**：
+- **报告**：`eda_report.html` - 交互式HTML报告,包含完整分析结果
+- **数据表**：
+  - `station_summary.csv` - 站点文件清单和基本信息
+  - `missingness_by_station_feature.csv` - 各站点各特征的缺失率详情
+  - `stats_overall.csv` - 全局统计量（所有站点合并）
+  - `stats_by_station.csv` - 分站点统计量
+- **可视化**：
+  - `missingness_analysis.png` - 缺失值分析热力图
+  - `distributions_seasonality.png` - 分布与季节性快照（PM2.5、PM10、O3）
+  - `pollutant_distributions.png` - **所有6种污染物的完整分布图**
+  - `station_comparison.png` - **所有6种污染物在12个站点的箱线图**
+  - `correlation_matrix.png` - 污染物与气象变量的相关性矩阵
+
+这里总结对建模最重要的几个发现。
 
 ### 2.1 缺失值分析
 
@@ -120,6 +136,16 @@
 
 ![](eda_output/distributions_seasonality.png)
 
+**所有污染物的分布特征**（包含 PM2.5、PM10、SO2、NO2、CO、O3 六种污染物的完整分布图）：
+
+![](eda_output/pollutant_distributions.png)
+
+从完整的分布图可以看出：
+- **PM2.5 和 PM10**：分布形态相似,均呈现右偏分布,大部分时间浓度较低,但偶尔会出现高污染事件
+- **SO2 和 NO2**：也呈现右偏分布,但 SO2 的偏度更大（低值更集中）
+- **CO**：虽然数值量级最大,但分布形态与其他污染物类似
+- **O3**：相对而言分布更对称,峰值位置更明显
+
 ### 2.4 站点间的差异和关联
 
 **站点异质性**：不同站点的污染水平差异明显。比如从 `eda_output/stats_by_station.csv` 可以看到：
@@ -128,9 +154,14 @@
 
 这说明建模时既要考虑各站点的独特性,也要捕捉站点之间的相互影响。
 
-**站点对比图**：
+**站点对比图**（包含所有6种污染物在12个站点的分布箱线图）：
 
 ![](eda_output/station_comparison.png)
+
+从站点对比图可以观察到：
+- **空间异质性**：不同站点的污染物浓度中位数和分布范围存在明显差异
+- **一致性模式**：虽然绝对水平不同,但大部分站点在各污染物上的变化趋势相似
+- **极端值**：部分站点在特定污染物上偶尔会出现极高值（图中未显示以保持可读性）
 
 **站点相关性**（以 PM2.5 为例）：
 

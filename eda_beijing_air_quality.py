@@ -456,52 +456,69 @@ plt.savefig(os.path.join(OUTPUT_DIR, 'distributions_seasonality.png'), dpi=150, 
 plt.close()
 print(f"   Saved: {OUTPUT_DIR}/distributions_seasonality.png")
 
-# 13. Station comparison plot - Boxplots of PM2.5 by station
-print("\n13. Creating station comparison plots...")
+# 13. Station comparison plot - Boxplots for all 6 pollutants by station
+print("\n13. Creating station comparison plots for all pollutants...")
 
-fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+fig, axes = plt.subplots(3, 2, figsize=(16, 18))
+axes = axes.flatten()
 
-# PM2.5 boxplot by station
-ax1 = axes[0]
 station_order = stats_by_station_df.sort_values('PM2.5_mean')['station'].tolist()
-pm25_data = []
-for station in station_order:
-    pm25_data.append(all_dfs[station]['PM2.5'].dropna().values)
-
-bp = ax1.boxplot(pm25_data, labels=station_order, patch_artist=True, showfliers=False)
 colors = plt.cm.viridis(np.linspace(0, 1, len(station_order)))
-for patch, color in zip(bp['boxes'], colors):
-    patch.set_facecolor(color)
-ax1.set_xlabel('Station')
-ax1.set_ylabel('PM2.5 (μg/m³)')
-ax1.set_title('PM2.5 Distribution by Station (outliers hidden)', fontsize=12, fontweight='bold')
-ax1.tick_params(axis='x', rotation=45)
 
-# PM10 boxplot by station
-ax2 = axes[1]
-pm10_data = []
-for station in station_order:
-    pm10_data.append(all_dfs[station]['PM10'].dropna().values)
+for idx, pollutant in enumerate(POLLUTANTS):
+    ax = axes[idx]
+    pollutant_data = []
+    for station in station_order:
+        pollutant_data.append(all_dfs[station][pollutant].dropna().values)
 
-bp2 = ax2.boxplot(pm10_data, labels=station_order, patch_artist=True, showfliers=False)
-for patch, color in zip(bp2['boxes'], colors):
-    patch.set_facecolor(color)
-ax2.set_xlabel('Station')
-ax2.set_ylabel('PM10 (μg/m³)')
-ax2.set_title('PM10 Distribution by Station (outliers hidden)', fontsize=12, fontweight='bold')
-ax2.tick_params(axis='x', rotation=45)
+    bp = ax.boxplot(pollutant_data, labels=station_order, patch_artist=True, showfliers=False)
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+
+    ax.set_xlabel('Station', fontsize=10)
+    ax.set_ylabel(f'{pollutant} (μg/m³)', fontsize=10)
+    ax.set_title(f'{pollutant} Distribution by Station (outliers hidden)', fontsize=12, fontweight='bold')
+    ax.tick_params(axis='x', rotation=45, labelsize=8)
 
 plt.tight_layout()
 plt.savefig(os.path.join(OUTPUT_DIR, 'station_comparison.png'), dpi=150, bbox_inches='tight')
 plt.close()
 print(f"   Saved: {OUTPUT_DIR}/station_comparison.png")
 
+# 14. Distribution plots for all 6 pollutants
+print("\n14. Creating distribution plots for all pollutants...")
+
+fig, axes = plt.subplots(3, 2, figsize=(15, 18))
+axes = axes.flatten()
+
+for idx, pollutant in enumerate(POLLUTANTS):
+    ax = axes[idx]
+    data = combined_df[pollutant].dropna()
+
+    # Clip for visualization (keep original data intact)
+    data_clipped = data[data <= data.quantile(0.99)]
+
+    ax.hist(data_clipped, bins=50, density=True, alpha=0.7, color='steelblue', edgecolor='white')
+    data_clipped.plot.kde(ax=ax, color='darkred', linewidth=2)
+    ax.set_xlabel(f'{pollutant} (μg/m³)', fontsize=10)
+    ax.set_ylabel('Density', fontsize=10)
+    ax.set_title(f'{pollutant} Distribution (clipped at p99)', fontsize=11, fontweight='bold')
+    ax.axvline(data.mean(), color='green', linestyle='--', linewidth=1.5, label=f'Mean: {data.mean():.1f}')
+    ax.axvline(data.median(), color='orange', linestyle='--', linewidth=1.5, label=f'Median: {data.median():.1f}')
+    ax.legend(fontsize=9, loc='upper right')
+    ax.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.savefig(os.path.join(OUTPUT_DIR, 'pollutant_distributions.png'), dpi=150, bbox_inches='tight')
+plt.close()
+print(f"   Saved: {OUTPUT_DIR}/pollutant_distributions.png")
+
 # Additional: Correlation heatmap
 print("\n   Creating correlation heatmap...")
 fig, ax = plt.subplots(figsize=(10, 8))
 corr_matrix = combined_df[NUMERIC_VARS].corr()
 mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
-sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap='RdBu_r', 
+sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap='RdBu_r',
             center=0, ax=ax, square=True, linewidths=0.5)
 ax.set_title('Correlation Matrix: Pollutants and Meteorology Variables', fontsize=12, fontweight='bold')
 plt.tight_layout()
@@ -689,14 +706,20 @@ html_content = f"""<!DOCTYPE html>
 
     <h2>📈 Section E: Distributions & Seasonality</h2>
     <div class="img-container">
+        <h3>Distributions and Seasonality Snapshots</h3>
         <img src="distributions_seasonality.png" alt="Distributions and Seasonality">
     </div>
-    
+
     <div class="img-container">
-        <h3>Station Comparison</h3>
+        <h3>All Pollutants Distributions</h3>
+        <img src="pollutant_distributions.png" alt="All Pollutants Distributions">
+    </div>
+
+    <div class="img-container">
+        <h3>Station Comparison for All Pollutants</h3>
         <img src="station_comparison.png" alt="Station Comparison">
     </div>
-    
+
     <div class="img-container">
         <h3>Correlation Matrix</h3>
         <img src="correlation_matrix.png" alt="Correlation Matrix">
@@ -741,7 +764,8 @@ CSV Tables:
 Visualizations:
   - missingness_analysis.png
   - distributions_seasonality.png
-  - station_comparison.png
+  - pollutant_distributions.png (NEW: all 6 pollutants)
+  - station_comparison.png (UPDATED: all 6 pollutants)
   - correlation_matrix.png
 
 Report:

@@ -396,8 +396,8 @@ print("\n" + "=" * 80)
 print("SECTION E: DISTRIBUTION & SEASONALITY SNAPSHOTS")
 print("=" * 80)
 
-# 12. Distribution plots
-print("\n12. Creating distribution and seasonality plots...")
+# 12. Distribution plots (quick snapshots)
+print("\n12. Creating distribution snapshots (PM2.5, PM10, O3)...")
 
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
@@ -440,7 +440,7 @@ ax5.set_xlabel('Month')
 ax5.set_ylabel('PM2.5 (μg/m³)')
 ax5.set_title('Average Monthly Cycle: PM2.5', fontsize=11, fontweight='bold')
 ax5.set_xticks(range(1, 13))
-ax5.set_xticklabels(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+ax5.set_xticklabels(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], rotation=45)
 
 # 12d. Yearly trend for PM2.5
@@ -455,6 +455,43 @@ plt.tight_layout()
 plt.savefig(os.path.join(OUTPUT_DIR, 'distributions_seasonality.png'), dpi=150, bbox_inches='tight')
 plt.close()
 print(f"   Saved: {OUTPUT_DIR}/distributions_seasonality.png")
+
+# 12e. Comprehensive seasonality analysis for all 6 pollutants
+print("\n   Creating comprehensive seasonality patterns for all pollutants...")
+
+fig, axes = plt.subplots(6, 2, figsize=(16, 24))
+colors_cycle = plt.cm.tab10(range(6))
+
+# Monthly cycles (left column)
+for idx, pollutant in enumerate(POLLUTANTS):
+    ax = axes[idx, 0]
+    monthly_data = combined_df.groupby('month')[pollutant].mean()
+    ax.bar(monthly_data.index, monthly_data.values, color=colors_cycle[idx],
+           edgecolor='black', alpha=0.7)
+    ax.set_xlabel('Month', fontsize=10)
+    ax.set_ylabel(f'{pollutant} (μg/m³)', fontsize=10)
+    ax.set_title(f'{pollutant} Monthly Cycle', fontsize=11, fontweight='bold')
+    ax.set_xticks(range(1, 13))
+    ax.set_xticklabels(['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])
+    ax.grid(True, alpha=0.3, axis='y')
+
+# Diurnal cycles (right column)
+for idx, pollutant in enumerate(POLLUTANTS):
+    ax = axes[idx, 1]
+    diurnal_data = combined_df.groupby('hour')[pollutant].mean()
+    ax.plot(diurnal_data.index, diurnal_data.values, 'o-',
+            color=colors_cycle[idx], linewidth=2, markersize=4)
+    ax.set_xlabel('Hour of Day', fontsize=10)
+    ax.set_ylabel(f'{pollutant} (μg/m³)', fontsize=10)
+    ax.set_title(f'{pollutant} Diurnal Cycle', fontsize=11, fontweight='bold')
+    ax.set_xticks(range(0, 24, 3))
+    ax.grid(True, alpha=0.3)
+    ax.fill_between(diurnal_data.index, diurnal_data.values, alpha=0.2, color=colors_cycle[idx])
+
+plt.tight_layout()
+plt.savefig(os.path.join(OUTPUT_DIR, 'seasonality_all_pollutants.png'), dpi=150, bbox_inches='tight')
+plt.close()
+print(f"   Saved: {OUTPUT_DIR}/seasonality_all_pollutants.png")
 
 # 13. Station comparison plot - Boxplots for all 6 pollutants by station
 print("\n13. Creating station comparison plots for all pollutants...")
@@ -706,13 +743,19 @@ html_content = f"""<!DOCTYPE html>
 
     <h2>📈 Section E: Distributions & Seasonality</h2>
     <div class="img-container">
-        <h3>Distributions and Seasonality Snapshots</h3>
+        <h3>Distributions and Seasonality Snapshots (PM2.5, PM10, O3)</h3>
         <img src="distributions_seasonality.png" alt="Distributions and Seasonality">
     </div>
 
     <div class="img-container">
         <h3>All Pollutants Distributions</h3>
         <img src="pollutant_distributions.png" alt="All Pollutants Distributions">
+    </div>
+
+    <div class="img-container">
+        <h3>Comprehensive Seasonality Patterns (All 6 Pollutants)</h3>
+        <img src="seasonality_all_pollutants.png" alt="Seasonality for All Pollutants">
+        <p><em>Left column: Monthly cycles; Right column: Diurnal (hourly) cycles</em></p>
     </div>
 
     <div class="img-container">
@@ -763,9 +806,10 @@ CSV Tables:
 
 Visualizations:
   - missingness_analysis.png
-  - distributions_seasonality.png
-  - pollutant_distributions.png (NEW: all 6 pollutants)
-  - station_comparison.png (UPDATED: all 6 pollutants)
+  - distributions_seasonality.png (quick snapshots: PM2.5, PM10, O3)
+  - pollutant_distributions.png (NEW: all 6 pollutants distributions)
+  - seasonality_all_pollutants.png (NEW: monthly & diurnal cycles for all 6 pollutants)
+  - station_comparison.png (UPDATED: all 6 pollutants boxplots)
   - correlation_matrix.png
 
 Report:

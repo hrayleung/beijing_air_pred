@@ -71,6 +71,7 @@
   - `missingness_analysis.png` - 缺失值分析热力图
   - `distributions_seasonality.png` - 分布与季节性快照（PM2.5、PM10、O3）
   - `pollutant_distributions.png` - **所有6种污染物的完整分布图**
+  - `seasonality_all_pollutants.png` - **所有6种污染物的月周期和日周期完整分析**
   - `station_comparison.png` - **所有6种污染物在12个站点的箱线图**
   - `correlation_matrix.png` - 污染物与气象变量的相关性矩阵
 
@@ -132,9 +133,20 @@
 
 这种长周期（季节）和短周期（日内）叠加的模式,意味着模型需要能够捕捉多尺度的时间依赖关系。
 
-**分布和季节性可视化**：
+**分布和季节性快照**（PM2.5、PM10、O3 代表性可视化）：
 
 ![](eda_output/distributions_seasonality.png)
+
+**所有污染物的完整季节性分析**（月周期与日周期）：
+
+![](eda_output/seasonality_all_pollutants.png)
+
+从完整的季节性分析图可以观察到每种污染物的独特时间模式：
+- **PM2.5 和 PM10**：冬季（12-2月）浓度显著升高,日周期呈现夜间高、午后低的U型特征
+- **SO2**：季节性模式与PM类似但幅度更大,冬季浓度可达夏季的3-4倍
+- **NO2**：早晚交通高峰时段浓度上升,呈现明显的双峰日周期
+- **CO**：季节性变化显著（冬高夏低）,日周期相对平缓
+- **O3**：与其他污染物相反,夏季浓度更高,日周期呈现午后峰值（光化学反应）
 
 **所有污染物的分布特征**（包含 PM2.5、PM10、SO2、NO2、CO、O3 六种污染物的完整分布图）：
 

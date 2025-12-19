@@ -67,14 +67,16 @@ class WindGatedDynamicGraphBuilder(nn.Module):
         g = torch.sigmoid(self.gate_mlp(wind_uvs))  # (B, L, N, 1)
         return g
 
-    def build_A_dyn(self, h: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
+    def build_A_dyn(self, h: torch.Tensor, gate: torch.Tensor, A_bias: Optional[torch.Tensor] = None) -> torch.Tensor:
         # h: (B, L, N, d_model), gate: (B, L, N, 1)
         q = self.Wq(h)  # (B, L, N, d_qk)
         k = self.Wk(h)  # (B, L, N, d_qk)
 
         # logits: (B, L, N, N)
         logits = torch.einsum("blid,bljd->blij", q, k) / (self.d_qk ** 0.5)
-        logits = logits + (self.lambda_gate * gate)  # broadcast over j
+        # Wind gating: scale attention "temperature" per source node (i).
+        # NOTE: adding a row-wise constant would cancel out under softmax; scaling does not.
+        logits = logits * (1.0 + (self.lambda_gate * gate))
         return F.softmax(logits, dim=-1)
 
     def forward(self, h: torch.Tensor, A_static: torch.Tensor, wind_uvs: torch.Tensor) -> torch.Tensor:
@@ -101,4 +103,3 @@ class WindGatedDynamicGraphBuilder(nn.Module):
             fused = add_self_loops(fused, weight=1.0)
 
         return row_normalize(fused)
-

@@ -10,6 +10,11 @@ import torch
 from model.metrics.masked_metrics import horizon_variation_check, macro_average, per_pollutant_metrics
 from model.evaluation.plots import plot_error_vs_horizon, plot_prediction_example
 
+try:
+    from tqdm import tqdm
+except Exception:  # pragma: no cover
+    tqdm = None
+
 
 def evaluate_model(
     model: torch.nn.Module,
@@ -25,7 +30,10 @@ def evaluate_model(
     ys = []
     masks = []
     with torch.no_grad():
-        for batch in loader:
+        it = loader
+        if tqdm is not None:
+            it = tqdm(loader, desc="[eval] iter", total=len(loader), leave=False, dynamic_ncols=True)
+        for batch in it:
             X = batch["X"].to(device)
             pred = model(X).detach().cpu().numpy().astype(np.float32)
             preds.append(pred)

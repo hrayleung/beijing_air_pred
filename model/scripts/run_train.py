@@ -5,6 +5,7 @@ import json
 import os
 from typing import Dict
 
+import numpy as np
 import torch
 import yaml
 from torch.utils.data import DataLoader
@@ -71,11 +72,31 @@ def main():
 
     # Loss weights from TRAIN
     std, weights = compute_target_std_weights_from_npz(os.path.join(cfg["data"]["p1_deep_dir"], "train.npz"), eps=float(cfg["training"]["loss_eps"]))
+    loss_weighting = str(cfg.get("training", {}).get("loss_weighting", "std")).lower()
+    if loss_weighting in {"std", "inv_std", "inverse_std"}:
+        used_weights = weights
+    elif loss_weighting in {"none", "uniform"}:
+        used_weights = np.ones_like(weights, dtype=np.float32)
+    else:
+        raise ValueError(f"Unknown training.loss_weighting={loss_weighting!r} (expected 'std' or 'none')")
     os.makedirs(os.path.join(results_dir, "metrics"), exist_ok=True)
     with open(os.path.join(results_dir, "metrics", "target_std_weights.json"), "w", encoding="utf-8") as f:
-        json.dump({"std": std.tolist(), "weights": weights.tolist(), "targets": target_list}, f, indent=2)
-    weights_t = torch.tensor(weights, dtype=torch.float32)
-    print(f"[loss] target_std_weights saved to {os.path.join(results_dir, 'metrics', 'target_std_weights.json')}", flush=True)
+        json.dump(
+            {
+                "std": std.tolist(),
+                "weights": weights.tolist(),
+                "used_weights": used_weights.tolist(),
+                "loss_weighting": loss_weighting,
+                "targets": target_list,
+            },
+            f,
+            indent=2,
+        )
+    weights_t = torch.tensor(used_weights, dtype=torch.float32)
+    print(
+        f"[loss] loss_weighting={loss_weighting} saved {os.path.join(results_dir, 'metrics', 'target_std_weights.json')}",
+        flush=True,
+    )
 
     # Model
     mcfg = cfg["model"]

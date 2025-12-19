@@ -1,0 +1,100 @@
+[
+  {
+    "epoch": 1,
+    "train_loss": 164.20447838743624,
+    "val_macro_MAE": 95.74154965082805,
+    "val_macro_RMSE": 136.15300365069052,
+    "val_macro_sMAPE": 37.577239175637565
+  },
+  {
+    "epoch": 2,
+    "train_loss": 129.91064210625908,
+    "val_macro_MAE": 90.99952546755473,
+    "val_macro_RMSE": 130.54087350906966,
+    "val_macro_sMAPE": 32.78534859418869
+  },
+  {
+    "epoch": 3,
+    "train_loss": 119.58348652436273,
+    "val_macro_MAE": 92.59306081136067,
+    "val_macro_RMSE": 133.34700857770045,
+    "val_macro_sMAPE": 32.16856072346369
+  },
+  {
+    "epoch": 4,
+    "train_loss": 112.5951578005019,
+    "val_macro_MAE": 89.98197507858276,
+    "val_macro_RMSE": 126.83401244834249,
+    "val_macro_sMAPE": 31.85643454392751
+  },
+  {
+    "epoch": 5,
+    "train_loss": 105.67321721382422,
+    "val_macro_MAE": 90.71525971094768,
+    "val_macro_RMSE": 129.69003661973488,
+    "val_macro_sMAPE": 31.8366472919782
+  },
+  {
+    "epoch": 6,
+    "train_loss": 100.24241488953383,
+    "val_macro_MAE": 89.8997191588084,
+    "val_macro_RMSE": 126.53928038955638,
+    "val_macro_sMAPE": 31.965805341800053
+  },
+  {
+    "epoch": 7,
+    "train_loss": 95.5607460413702,
+    "val_macro_MAE": 92.14792807896931,
+    "val_macro_RMSE": 131.99111328635556,
+    "val_macro_sMAPE": 32.217360039552055
+  },
+  {
+    "epoch": 8,
+    "train_loss": 91.66420700147857,
+    "val_macro_MAE": 95.53708378473918,
+    "val_macro_RMSE": 136.96256243577577,
+    "val_macro_sMAPE": 32.91404495636622
+  },
+  {
+    "epoch": 9,
+    "train_loss": 88.74197546252411,
+    "val_macro_MAE": 94.90571276346843,
+    "val_macro_RMSE": 133.88857307933893,
+    "val_macro_sMAPE": 32.524103919665016
+  },
+  {
+    "epoch": 10,
+    "train_loss": 85.61444213046421,
+    "val_macro_MAE": 95.00818260510762,
+    "val_macro_RMSE": 135.17627319434436,
+    "val_macro_sMAPE": 32.31173555056254
+  },
+  {
+    "epoch": 11,
+    "train_loss": 83.1497387687851,
+    "val_macro_MAE": 97.50091099739075,
+    "val_macro_RMSE": 140.3665719506328,
+    "val_macro_sMAPE": 33.21261207262675
+  },
+  {
+    "epoch": 12,
+    "train_loss": 80.85061104548298,
+    "val_macro_MAE": 95.67779032389323,
+    "val_macro_RMSE": 136.6532084946583,
+    "val_macro_sMAPE": 32.32939491669337
+  },
+  {
+    "epoch": 13,
+    "train_loss": 78.70560776167218,
+    "val_macro_MAE": 98.13135361671448,
+    "val_macro_RMSE": 140.22514906366538,
+    "val_macro_sMAPE": 33.24810117483139
+  },
+  {
+    "epoch": 14,
+    "train_loss": 76.98812237578674,
+    "val_macro_MAE": 95.69343670209248,
+    "val_macro_RMSE": 135.5835894100935,
+    "val_macro_sMAPE": 32.226973275343575
+  }
+]

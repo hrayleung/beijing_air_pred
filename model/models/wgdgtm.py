@@ -12,6 +12,7 @@ from model.modules.spatial_layer import SpatialMessagePassing
 from model.modules.tcn import TemporalConvNet
 from model.modules.horizon_decoder import HorizonDecoder
 from model.modules.multihead_decoder import MultiHeadHorizonDecoder
+from model.modules.temporal_attn_decoder import TemporalAttentionHorizonDecoder
 from model.modules.residual_baseline import compute_persistence_baseline
 
 
@@ -39,7 +40,7 @@ class WGDTMConfig:
     dec_h_emb_dim: int
     dec_hidden_dim: int
     dec_dropout: float
-    decoder_type: str = "shared"  # "shared" | "multihead"
+    decoder_type: str = "shared"  # "shared" | "multihead" | "temporal_attn"
     use_residual_forecasting: bool = False
     assert_shapes: bool = False
 
@@ -112,6 +113,15 @@ class WGDGTM(nn.Module):
                 hidden_dim=cfg.dec_hidden_dim,
                 dropout=cfg.dec_dropout,
             )
+        elif cfg.decoder_type == "temporal_attn":
+            self.decoder = TemporalAttentionHorizonDecoder(
+                d_in=cfg.tcn_channels,
+                horizon=cfg.horizon,
+                d_h=cfg.dec_h_emb_dim,
+                out_dim=cfg.num_targets,
+                hidden_dim=cfg.dec_hidden_dim,
+                dropout=cfg.dec_dropout,
+            )
         else:
             raise ValueError(f"Unknown decoder_type: {cfg.decoder_type}")
 
@@ -145,9 +155,12 @@ class WGDGTM(nn.Module):
         # TCN expects (B*N, C, L)
         z = z.permute(0, 2, 3, 1).reshape(B * N, self.cfg.tcn_channels, L)
         y = self.tcn(z)  # (B*N, C, L)
-        r_last = y[:, :, -1].reshape(B, N, self.cfg.tcn_channels)  # (B, N, C)
-
-        delta_hat = self.decoder(r_last)  # (B, H, N, D)
+        if self.cfg.decoder_type == "temporal_attn":
+            rep_seq = y.reshape(B, N, self.cfg.tcn_channels, L)  # (B, N, C, L)
+            delta_hat = self.decoder(rep_seq)  # (B, H, N, D)
+        else:
+            r_last = y[:, :, -1].reshape(B, N, self.cfg.tcn_channels)  # (B, N, C)
+            delta_hat = self.decoder(r_last)  # (B, H, N, D)
 
         if self.cfg.use_residual_forecasting:
             y_base = compute_persistence_baseline(

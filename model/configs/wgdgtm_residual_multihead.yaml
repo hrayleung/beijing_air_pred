@@ -63,6 +63,7 @@ training:
   gpus: null
 
   # Required: std-weighted masked MAE loss
+  loss_weighting: "std"  # "std" | "none"
   loss_eps: 1.0e-6
 
 results:
@@ -71,4 +72,3 @@ results:
 
 debug:
   assert_shapes: true
-

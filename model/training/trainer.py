@@ -14,6 +14,11 @@ from model.losses.masked_losses import weighted_masked_mae
 from model.metrics.masked_metrics import macro_average, per_pollutant_metrics
 from model.training.callbacks import EarlyStopping
 
+try:
+    from tqdm import tqdm
+except Exception:  # pragma: no cover
+    tqdm = None
+
 
 @dataclass(frozen=True)
 class TrainState:
@@ -66,7 +71,10 @@ class Trainer:
         preds = []
         ys = []
         masks = []
-        for batch in loader:
+        it = loader
+        if tqdm is not None:
+            it = tqdm(loader, desc="[val] iter", total=len(loader), leave=False, dynamic_ncols=True)
+        for batch in it:
             X = batch["X"].to(self.device)
             pred = self.model(X).detach().cpu().numpy().astype(np.float32)
             preds.append(pred)
@@ -92,7 +100,10 @@ class Trainer:
             total = 0.0
             count = 0
             t0 = time.time()
-            for batch in train_loader:
+            it = train_loader
+            if tqdm is not None:
+                it = tqdm(train_loader, desc=f"[train] epoch {epoch}/{int(epochs)}", total=len(train_loader), leave=False, dynamic_ncols=True)
+            for batch in it:
                 self.optimizer.zero_grad(set_to_none=True)
                 loss, _ = self._step_batch(batch)
                 loss.backward()
@@ -100,14 +111,12 @@ class Trainer:
                 self.optimizer.step()
                 total += float(loss.item())
                 count += 1
-                if self.log_interval > 0 and (count % self.log_interval) == 0:
+                avg = total / max(count, 1)
+                if tqdm is not None and hasattr(it, "set_postfix") and (self.log_interval > 0) and ((count % self.log_interval) == 0):
+                    it.set_postfix(loss=f"{avg:.6f}")
+                elif self.log_interval > 0 and (count % self.log_interval) == 0:
                     elapsed = time.time() - t0
-                    avg = total / max(count, 1)
-                    print(
-                        f"[train] epoch={epoch} step={count}/{len(train_loader)} "
-                        f"loss={avg:.6f} elapsed={elapsed:.1f}s",
-                        flush=True,
-                    )
+                    print(f"[train] epoch={epoch} step={count}/{len(train_loader)} loss={avg:.6f} elapsed={elapsed:.1f}s", flush=True)
 
             train_loss = total / max(count, 1)
             val_metrics = self._evaluate_loader(val_loader, pollutant_names)

@@ -1,0 +1,71 @@
+# WG-DGTM experiment: temporal-attention decoder + macro-aligned loss
+seed: 42
+
+data:
+  processed_dir: "processed"
+  p1_deep_dir: "processed/P1_deep"
+  graphs_dir: "processed/graphs"
+
+task:
+  lookback: 168
+  horizon: 24
+  num_stations: 12
+  num_targets: 6
+
+model:
+  d_model: 64
+  d_qk: 64
+  d_node_emb: 16
+  dropout: 0.1
+  use_residual_forecasting: false
+
+  wind_gate:
+    hidden_dim: 32
+    # Set 0.0 to disable wind gating (matches old behavior where gating was effectively a no-op).
+    lambda_gate: 0.0
+
+  graph_fusion:
+    alpha_init: 1.0
+    beta_init: 1.0
+    gamma_init: 1.0
+    add_self_loops: true
+
+  spatial:
+    out_dim: 64
+
+  tcn:
+    channels: 64
+    num_layers: 6
+    kernel_size: 3
+    dropout: 0.2
+
+  decoder:
+    type: "temporal_attn"
+    horizon_emb_dim: 16
+    hidden_dim: 64
+    dropout: 0.1
+
+training:
+  batch_size: 64
+  num_workers: 0
+  epochs: 50
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  grad_clip: 5.0
+  patience: 8
+  min_delta: 0.0
+  log_interval: 50
+  use_data_parallel: true
+  gpus: null
+
+  # Optimize raw-unit macro MAE (not std-normalized).
+  loss_weighting: "none"  # "std" | "none"
+  loss_eps: 1.0e-6
+
+results:
+  dir: "model/results"
+  experiment_name: "wgdgtm_temporal_attn_macro"
+
+debug:
+  assert_shapes: true
+

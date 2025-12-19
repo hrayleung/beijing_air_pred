@@ -1,0 +1,27 @@
+{
+  "phase": "eval",
+  "timestamp": "2025-12-18T18:33:21.919343+08:00",
+  "cwd": "/home/c101-5-2/lhr/dwm/final",
+  "argv": [
+    "/home/c101-5-2/lhr/dwm/final/extreme_model/scripts/run_eval.py",
+    "--config",
+    "extreme_model/configs/stformer.yaml",
+    "--ckpt",
+    "extreme_model/results/stformer_residual/checkpoints/best.pt"
+  ],
+  "config_path": "extreme_model/configs/stformer.yaml",
+  "ckpt": "extreme_model/results/stformer_residual/checkpoints/best.pt",
+  "model_name": "stformer",
+  "model_display_name": "ST-Former",
+  "device": "cuda:0",
+  "torch_version": "2.8.0+cu128",
+  "cuda_available": true,
+  "cuda_device_count": 4,
+  "gpu_names": [
+    "NVIDIA GeForce RTX 4090 D",
+    "NVIDIA GeForce RTX 4090 D",
+    "NVIDIA GeForce RTX 4090 D",
+    "NVIDIA GeForce RTX 4090 D"
+  ],
+  "git_commit": "6c5d98cb6745eab9ece0e23dc5ed140f5a6d6806"
+}
